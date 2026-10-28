@@ -55,6 +55,8 @@ canvas { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(-
 .pii li { margin: 2px 0; } .plate { background: #f7d117; color: #111; padding: 1px 8px; border-radius: 5px; font-family: monospace; }
 .note { border-left: 3px solid var(--warn); padding-left: 10px; }
 details summary { cursor: pointer; font-weight: 600; }
+#webcam video { width: 100%; border-radius: 10px; border: 1px solid var(--rule); background: #000; display: block; margin-top: 12px; }
+.pii li.flagged { color: var(--warn); }
 a { color: var(--accent); }
 </style>
 </head>
@@ -83,6 +85,13 @@ a { color: var(--accent); }
     </div>
     <input id="camera" type="file" accept="image/*" capture="environment">
     <input id="files" type="file" accept="image/*" multiple>
+    <div id="webcam" hidden>
+      <video id="video" playsinline muted></video>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="snapBtn" type="button">Capture page</button>
+        <button class="btn secondary" id="closeCamBtn" type="button">Close camera</button>
+      </div>
+    </div>
     <div class="thumbs" id="thumbs"></div>
     <div class="row" style="margin-top:12px">
       <button class="btn" id="scanBtn" type="button" disabled>Scan document</button>
@@ -99,7 +108,7 @@ a { color: var(--accent); }
         <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer sees</button>
       </div>
       <div id="canvases"></div>
-      <p class="muted small note">AI boxes are suggestions. Check every page for anything missed before sharing.</p>
+      <p class="muted small note">Orange boxes are numbers that match personal data found on this or an earlier scan in this session (e.g. the end of a phone number peeking out from under a receipt). AI boxes are suggestions. Check every page for anything missed before sharing.</p>
       <ul class="pii small" id="piiList"></ul>
       <div class="row"><button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button></div>
     </section>
@@ -126,8 +135,8 @@ a { color: var(--accent); }
 </main>
 
 <script>
-const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": ["integer", "null"]}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "enum": ["engine_oil", "oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs", "brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid", "coolant", "timing_belt", "aux_belt", "tyre", "battery", "bulb", "wipers", "clutch", "exhaust", "suspension", "screenwash", "mot_test", "labour", "diagnostics", "other"]}, "quantity": {"type": ["number", "null"]}, "unit_price": {"type": ["number", "null"]}, "line_total": {"type": ["number", "null"]}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": ["number", "null"]}, "osf": {"type": ["number", "null"]}, "nsr": {"type": ["number", "null"]}, "osr": {"type": ["number", "null"]}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": ["number", "null"]}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": ["number", "null"], "description": "Grand total as PRINTED on the document (incl. VAT). Null if not printed or illegible - never compute it from line items."}, "amount_paid": {"type": ["number", "null"], "description": "Amount charged, e.g. on a card receipt"}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "notes"], "additionalProperties": false};
-const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
+const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": ["integer", "null"]}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "enum": ["engine_oil", "oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs", "brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid", "coolant", "timing_belt", "aux_belt", "tyre", "battery", "bulb", "wipers", "clutch", "exhaust", "suspension", "screenwash", "mot_test", "labour", "diagnostics", "other"]}, "quantity": {"type": ["number", "null"]}, "unit_price": {"type": ["number", "null"]}, "line_total": {"type": ["number", "null"]}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": ["number", "null"]}, "osf": {"type": ["number", "null"]}, "nsr": {"type": ["number", "null"]}, "osr": {"type": ["number", "null"]}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": ["number", "null"]}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": ["number", "null"], "description": "Grand total as PRINTED on the document (incl. VAT). Null if not printed or illegible - never compute it from line items."}, "amount_paid": {"type": ["number", "null"], "description": "Amount charged, e.g. on a card receipt"}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes"], "additionalProperties": false};
+const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
 const MAX_EDGE = 1568;
 const PRICES = { "claude-opus-5-5": [4, 20], "claude-haiku-5-5": [0.10, 0.50] };
@@ -183,11 +192,42 @@ async function addFiles(fileList) {
   if (pages.length) setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or scan.`);
 }
 
-$("cameraBtn").onclick = () => $("camera").click();
+// capture="environment" only opens the camera on phones; desktop browsers
+// ignore it and show a file picker, so use the webcam there instead.
+const touch = matchMedia("(pointer: coarse)").matches;
+const webcamOk = !!navigator.mediaDevices?.getUserMedia;
+let stream = null;
+if (!touch) {
+  if (webcamOk) $("cameraBtn").textContent = "📷 Use webcam";
+  else $("cameraBtn").hidden = true;
+}
+
+async function openWebcam() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 } } });
+  } catch (err) { setStatus("Couldn't open the webcam: " + err.message, "error"); return; }
+  $("video").srcObject = stream;
+  await $("video").play();
+  $("webcam").hidden = false;
+}
+function closeWebcam() {
+  stream?.getTracks().forEach(t => t.stop());
+  stream = null; $("video").srcObject = null; $("webcam").hidden = true;
+}
+$("snapBtn").onclick = () => {
+  const v = $("video"), c = document.createElement("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  c.toBlob(blob => addFiles([new File([blob], `webcam-${Date.now()}.jpg`, { type: "image/jpeg" })]), "image/jpeg", 0.92);
+};
+$("closeCamBtn").onclick = closeWebcam;
+
+$("cameraBtn").onclick = () => touch || !webcamOk ? $("camera").click() : openWebcam();
 $("filesBtn").onclick = () => $("files").click();
 $("camera").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("files").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("clearBtn").onclick = () => {
+  closeWebcam();
   pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true;
   $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
 };
@@ -225,11 +265,13 @@ $("scanBtn").onclick = async () => {
     if (msg.stop_reason === "max_tokens") throw new Error("Response was cut off; try fewer pages.");
     const text = msg.content.find(b => b.type === "text")?.text;
     result = JSON.parse(text);
+    const added = crossCheck(result);
     const [pin, pout] = PRICES[model];
     const usd = (msg.usage.input_tokens * pin + msg.usage.output_tokens * pout) / 1e6;
     $("usage").textContent = `${msg.model} · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
     render();
-    setStatus(`Done: ${result.pii.length} personal-data box${result.pii.length === 1 ? "" : "es"}, ~$${usd.toFixed(3)}.`);
+    setStatus(`Done: ${result.pii.length} personal-data box${result.pii.length === 1 ? "" : "es"}` +
+      (added ? ` (${added} from the cross-check)` : "") + `, ~$${usd.toFixed(3)}.`);
   } catch (err) {
     const hint = /authentication|x-api-key|invalid.*key/i.test(err.message) ? " Check your API key." : "";
     setStatus("Failed: " + err.message + hint, "error");
@@ -237,6 +279,28 @@ $("scanBtn").onclick = async () => {
     $("scanBtn").disabled = pages.length === 0;
   }
 };
+
+// Port of prototype/pii_check.py. Personal-data numbers from every scan in
+// this session (memory only, never stored), so a fragment on a receipt is
+// caught once the invoice it came from has been scanned.
+const MIN_FRAGMENT_DIGITS = 4, MIN_KNOWN_DIGITS = 4;
+const NOT_A_FRAGMENT = /[£$€]|\d[.,]\d{2}\b|\d:\d{2}/;
+const digits = t => t.replace(/\D/g, "");
+let knownPii = [];   // [digits, category]
+
+function crossCheck(doc) {
+  const known = knownPii.concat(doc.pii.map(p => [digits(p.text), p.category]).filter(([d]) => d.length >= MIN_KNOWN_DIGITS));
+  const extra = [];
+  for (const n of doc.unboxed_numbers) {
+    const d = digits(n.text);
+    if (NOT_A_FRAGMENT.test(n.text) || d.length < MIN_FRAGMENT_DIGITS) continue;
+    const m = known.find(([k]) => k.includes(d) || d.includes(k));
+    if (m) extra.push({ page: n.page, x0: n.x0, y0: n.y0, x1: n.x1, y1: n.y1, text: n.text, category: m[1], source: "cross_check" });
+  }
+  doc.pii.push(...extra);
+  knownPii = known;
+  return extra.length;
+}
 
 function boxesFor(i, page) {
   const f = page.full.width / page.small.width;
@@ -256,7 +320,7 @@ function drawPage(i, view) {
   ctx.drawImage(page.full, 0, 0);
   for (const b of boxesFor(i, page)) {
     if (view === "redacted") { ctx.fillStyle = "#000"; ctx.fillRect(b.x, b.y, b.w, b.h); }
-    else { ctx.strokeStyle = "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
+    else { ctx.strokeStyle = b.source === "cross_check" ? "#ff8c00" : "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
   }
   return c;
 }
@@ -295,7 +359,8 @@ function render() {
   renderCanvases();
   $("piiList").replaceChildren(...r.pii.map(p => {
     const li = document.createElement("li");
-    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")}`;
+    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")}` + (p.source === "cross_check" ? " (cross-check)" : "");
+    if (p.source === "cross_check") li.className = "flagged";
     return li;
   }));
 
