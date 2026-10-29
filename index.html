@@ -59,6 +59,19 @@ details summary { cursor: pointer; font-weight: 600; }
 .pii li.flagged { color: var(--warn); }
 a { color: var(--accent); }
 textarea { font: inherit; resize: vertical; }
+label.check { display: flex; align-items: center; gap: 10px; font-weight: 500; margin: 8px 0; }
+label.check input { width: 20px; height: 20px; margin: 0; }
+.linkbtn { background: none; border: 0; padding: 4px 6px; color: var(--accent); cursor: pointer; font: inherit; }
+.sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
+.sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
+@media print {
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  main > :not(#sellCard), #sellCard > :not(#saleOut), #saleOut > :not(#saleSheet) { display: none !important; }
+  #sellCard, #saleSheet { border: 0; padding: 0; margin: 0; background: #fff; }
+  #saleSheet * { color: #000 !important; }
+  .plate { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
 .advice { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
 .chip { display: inline-block; font-size: .8em; padding: 1px 9px; border-radius: 99px; border: 1px solid var(--rule); color: var(--text-2); margin: 0 4px 4px 0; }
 .reminder { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
@@ -142,16 +155,44 @@ textarea { font: inherit; resize: vertical; }
   <section class="card" id="adviceCard">
     <h2>3. What did the mechanic say?</h2>
     <p class="muted small">Advice they gave you out loud but didn't write down, e.g. "your tyres will want doing by mid-November". AI picks out what to do and when, and suggests reminders.</p>
-    <p class="small" id="adviceLink"></p>
+    <label for="adviceVisit">From which visit?</label>
+    <select id="adviceVisit"></select>
     <label for="adviceText">In your own words</label>
     <textarea id="adviceText" rows="4" placeholder="Type it, or tap Dictate and say it"></textarea>
     <div class="row" style="margin-top:10px">
       <button class="btn secondary" id="dictateBtn" type="button">🎙 Dictate</button>
       <button class="btn" id="adviceBtn" type="button" disabled>Save advice</button>
     </div>
-    <p class="muted small" id="dictateNote">Dictate uses your browser's speech recognition (Chrome sends the audio to Google to transcribe it). Your phone keyboard's mic key works too. Notes are kept in this tab only and are gone on reload.</p>
+    <p class="muted small" id="dictateNote">Dictate uses your browser's speech recognition (Chrome sends the audio to Google to transcribe it). Your phone keyboard's mic key works too.</p>
     <div class="status" id="adviceStatus" role="status" aria-live="polite"></div>
     <div id="adviceList"></div>
+  </section>
+
+  <section class="card" id="historyCard" hidden>
+    <h2>Your car's history</h2>
+    <p class="muted small">Saved in this browser only, so it builds up as you scan. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
+    <table><tbody id="historyRows"></tbody></table>
+    <p class="small muted" id="historyEmpty">No documents yet; advice notes are listed above.</p>
+  </section>
+
+  <section class="card" id="sellCard">
+    <h2>4. Selling mode</h2>
+    <p class="muted small">Turn your saved history into a sale-ready summary for buyers: the service record, recent work, selling points and an honest list of known issues.</p>
+    <label class="check"><input type="checkbox" id="sellReg" checked> Show registration (buyers use it for history checks)</label>
+    <label class="check"><input type="checkbox" id="sellVin"> Show VIN</label>
+    <label class="check"><input type="checkbox" id="sellCosts"> Show what you paid</label>
+    <div class="row" style="margin-top:12px"><button class="btn" id="sellBtn" type="button" disabled>Create sale summary</button></div>
+    <p class="muted small" id="sellHint"></p>
+    <div class="status" id="sellStatus" role="status" aria-live="polite"></div>
+    <div id="saleOut" hidden>
+      <div class="sale" id="saleSheet"></div>
+      <p class="small note" id="saleCostNote" hidden>Costs changed since the summary was written; create it again so the selling points match.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn secondary" id="printBtn" type="button">⬇ Save as PDF</button>
+        <button class="btn secondary" id="copyBtn" type="button">Copy as text</button>
+      </div>
+      <p class="muted small">A shareable link for buyers needs the real app's server. For now, save the PDF and send that.</p>
+    </div>
   </section>
 </main>
 
@@ -285,7 +326,6 @@ $("clearBtn").onclick = () => {
   closeWebcam();
   pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true;
   $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
-  updateAdviceLink();
 };
 
 $("scanBtn").onclick = async () => {
@@ -315,9 +355,9 @@ $("scanBtn").onclick = async () => {
     const usd = costUsd(msg, model);
     $("usage").textContent = `${msg.model} · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
     render();
-    updateAdviceLink();
+    saveVisit(result);
     setStatus(`Done: ${result.pii.length} personal-data box${result.pii.length === 1 ? "" : "es"}` +
-      (added ? ` (${added} from the cross-check)` : "") + `, ~$${usd.toFixed(3)}.`);
+      (added ? ` (${added} from the cross-check)` : "") + `, ~$${usd.toFixed(3)}. Saved to your history.`);
   } catch (err) {
     setStatus("Failed: " + err.message + failHint(err), "error");
   } finally {
@@ -462,27 +502,82 @@ function render() {
   $("raw").textContent = JSON.stringify(r, null, 2);
 }
 
+// Saved history: scanned visits and advice notes, kept in this browser
+// (localStorage) so they build up over time. Personal-data text and boxes are
+// never saved; only the vehicle and service fields.
+const HISTORY_KEY = "porter.history";
+const VISIT_FIELDS = ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "mileage", "mileage_unit",
+  "garage_name", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "next_due"];
+function loadHistory() {
+  try {
+    const h = JSON.parse(store.get(HISTORY_KEY));
+    if (Array.isArray(h?.visits) && Array.isArray(h?.notes)) return h;
+  } catch {}
+  return { visits: [], notes: [] };
+}
+const saved = loadHistory();
+const saveHistory = () => store.set(HISTORY_KEY, JSON.stringify(saved));
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+let lastVisitId = "";   // the visit scanned in this tab, offered first for advice
+
+function saveVisit(doc) {
+  const v = { id: newId(), savedAt: todayIso() };
+  for (const k of VISIT_FIELDS) v[k] = doc[k];
+  saved.visits.push(v);
+  saveHistory();
+  lastVisitId = v.id;
+  renderHistory();
+}
+
+const byDateDesc = (a, b) => (b.date || "").localeCompare(a.date || "");
+const visitLabel = v => [v.date || "undated", v.garage_name || v.doc_type.replaceAll("_", " ")].join(" · ");
+const workSummary = v => (v.work_items.length ? v.work_items : v.line_items.filter(l => l.category !== "labour").map(l => l.description)).join(", ")
+  || v.doc_type.replaceAll("_", " ");
+
+function renderHistory() {
+  const visits = [...saved.visits].sort(byDateDesc);
+  $("historyCard").hidden = !visits.length && !saved.notes.length;
+  $("historyRows").replaceChildren(...visits.map(v => {
+    const del = el("button", { className: "linkbtn", type: "button", ariaLabel: "Delete visit" }, "✕");
+    del.onclick = () => {
+      saved.visits = saved.visits.filter(x => x.id !== v.id);
+      if (lastVisitId === v.id) lastVisitId = "";
+      saveHistory(); renderHistory();
+    };
+    return el("tr", {},
+      el("td", {}, el("div", { style: "font-weight:600" }, visitLabel(v)), el("div", { className: "muted small" }, workSummary(v))),
+      el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() + " mi" : ""),
+      el("td", { className: "num" }, del));
+  }));
+  $("historyEmpty").hidden = visits.length > 0;
+  const keep = $("adviceVisit").value || lastVisitId;
+  $("adviceVisit").replaceChildren(el("option", { value: "" }, "Not linked (dated today)"),
+    ...visits.map(v => el("option", { value: v.id }, visitLabel(v))));
+  $("adviceVisit").value = visits.some(v => v.id === keep) ? keep : "";
+  $("sellBtn").disabled = !visits.length;
+  $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Scan at least one document first.";
+  renderNotes();
+}
+$("clearHistory").onclick = e => {
+  e.preventDefault();
+  if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
+  saved.visits = []; saved.notes = []; lastVisitId = ""; saveHistory(); renderHistory();
+  $("saleOut").hidden = true;
+};
+
 // Verbal advice: what the mechanic said but didn't write down. Claude turns
 // the owner's words into actions with dates, which become calendar reminders.
 const ADVICE_SCHEMA = {"type": "object", "properties": {"tags": {"type": "array", "items": {"type": "string", "enum": ["service", "repair", "advice", "purchase", "general"]}}, "summary": {"type": "string", "description": "One line, plain words"}, "actions": {"type": "array", "items": {"type": "object", "properties": {"action": {"type": "string", "description": "What to do, e.g. Replace front tyres"}, "quote": {"type": "string", "description": "The owner's words this action comes from"}, "due_date": {"type": "string", "description": "YYYY-MM-DD, or empty if no date was given"}, "approximate": {"type": "boolean"}, "due_mileage": {"type": ["integer", "null"], "description": "Odometer reading it is due at, if a mileage was given"}}, "required": ["action", "quote", "due_date", "approximate", "due_mileage"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Anything unclear"}}, "required": ["tags", "summary", "actions", "notes"], "additionalProperties": false};
 const ADVICE_SYSTEM = "You turn what a mechanic told a car owner out loud into a note for the car's\nservice history. The owner types or dictates it in their own words after the\nvisit, so expect speech-recognition slips (\"tires\", \"break pads\").\n\nTag the note with every type that fits: service, repair, advice (a\nrecommendation or warning), purchase, general. Write a one-line summary.\n\nList each thing the owner should do or keep an eye on as an action, with the\nwords it came from. Only include what the mechanic actually said; never add\nadvice of your own.\n\nDates: resolve against the reference date given (the visit date), picking the\nnext occurrence on or after it. Exact dates are not approximate. Fuzzy ones are:\n\"early <month>\" = the 5th, \"mid-<month>\" = the 15th, \"end of <month>\" = the last\nday, \"in a couple of weeks\" = +14 days, \"in a few months\" = +3 months, \"before\nwinter\" = 1 November, \"in the spring\" = 1 March. For a mileage (\"in another 2,000\nmiles\") give the odometer reading in due_mileage if the current mileage is known;\notherwise leave it null and say so in notes. No date given: empty due_date.";
 
 const todayIso = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
-const currentVisit = () => result && { date: result.date, garage: result.garage_name, mileage: result.mileage, advisories: result.advisories };
-
-function updateAdviceLink() {
-  const v = currentVisit();
-  $("adviceLink").textContent = v
-    ? `Linked to: ${v.garage || "the scanned document"}${v.date ? ", visit on " + v.date : ""}.`
-    : "Not linked to a scan. Scan the invoice first to attach the advice to that visit, or save it on its own (dated today).";
-}
-updateAdviceLink();
+const currentVisit = () => saved.visits.find(v => v.id === $("adviceVisit").value) || null;
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 if (!SR) {
   $("dictateBtn").hidden = true;
-  $("dictateNote").textContent = "Tip: use your phone keyboard's mic key to dictate. Notes are kept in this tab only and are gone on reload.";
+  $("dictateNote").textContent = "Tip: use your phone keyboard's mic key to dictate.";
 }
 $("dictateBtn").onclick = () => {
   if (rec) { rec.stop(); return; }
@@ -516,7 +611,7 @@ $("adviceBtn").onclick = async () => {
   const ref = visit?.date || todayIso();
   const context = [
     `Reference date: ${ref}`,
-    visit ? `Visit: ${visit.garage || "unknown garage"}, mileage ${visit.mileage ?? "unknown"}` : "Not linked to a visit; current mileage unknown.",
+    visit ? `Visit: ${visit.garage_name || "unknown garage"}, mileage ${visit.mileage ?? "unknown"}` : "Not linked to a visit; current mileage unknown.",
     visit?.advisories.length ? "Advisories printed on the document: " + visit.advisories.join("; ") : "",
     `What the mechanic said, in the owner's words:\n"""${text}"""`,
   ].filter(Boolean).join("\n");
@@ -530,7 +625,9 @@ $("adviceBtn").onclick = async () => {
   try {
     const msg = await callClaude(key, body);
     const parsed = JSON.parse(msg.content.find(b => b.type === "text")?.text);
-    renderAdvice({ text, ref, visit, parsed });
+    parsed.actions.forEach(a => { a.include = !!a.due_date; });
+    saved.notes.push({ id: newId(), visitId: visit?.id || "", garage: visit?.garage_name || "", ref, text, parsed });
+    saveHistory(); renderHistory();
     $("adviceText").value = "";
     const dated = parsed.actions.filter(a => a.due_date).length;
     setStatus(`Saved: ${parsed.actions.length} action${parsed.actions.length === 1 ? "" : "s"}, ${dated} with a date. ~$${costUsd(msg, model).toFixed(4)}.`, "", status);
@@ -540,23 +637,37 @@ $("adviceBtn").onclick = async () => {
   }
 };
 
-function renderAdvice(n) {
+function renderNotes() {
+  $("adviceList").replaceChildren(...[...saved.notes].reverse().map(noteBlock));
+}
+
+function noteBlock(n) {
   const p = n.parsed;
-  const where = n.visit ? `${n.visit.garage || "Scanned visit"} · ${n.ref}` : `Not linked to a scan · ${n.ref}`;
+  const where = n.visitId ? `${n.garage || "Scanned visit"} · ${n.ref}` : `Not linked to a visit · ${n.ref}`;
   const rows = p.actions.map(a => {
-    const tick = el("input", { type: "checkbox", checked: !!a.due_date, ariaLabel: "Add to calendar" });
+    const tick = el("input", { type: "checkbox", checked: !!a.include, ariaLabel: "Add to calendar" });
     const what = el("input", { type: "text", value: a.action, ariaLabel: "Reminder" });
     const date = el("input", { type: "date", value: a.due_date, ariaLabel: "Due date" });
-    date.oninput = () => { if (date.value) tick.checked = true; };
-    const meta = [
+    const meta = el("div", { className: "small muted" });
+    const showMeta = () => meta.textContent = [
       a.approximate && a.due_date ? "≈ approximate date" : "",
       a.due_mileage != null ? `or at ${a.due_mileage.toLocaleString()} miles` : "",
       a.quote ? `“${a.quote}”` : "",
     ].filter(Boolean).join(" · ");
-    return { tick, what, date, a, row: el("div", { className: "reminder" }, tick, el("div", {}, what, date, el("div", { className: "small muted" }, meta))) };
+    showMeta();
+    tick.onchange = () => { a.include = tick.checked; saveHistory(); };
+    what.onchange = () => { a.action = what.value.trim() || a.action; saveHistory(); };
+    date.onchange = () => {
+      a.due_date = date.value; a.approximate = false;
+      if (date.value) a.include = tick.checked = true;
+      showMeta(); saveHistory();
+    };
+    return { tick, date, a, row: el("div", { className: "reminder" }, tick, el("div", {}, what, date, meta)) };
   });
+  const del = el("button", { className: "linkbtn small", type: "button" }, "Delete note");
+  del.onclick = () => { saved.notes = saved.notes.filter(x => x.id !== n.id); saveHistory(); renderHistory(); };
   const block = el("div", { className: "advice" },
-    el("div", { className: "small muted" }, where),
+    el("div", { className: "small muted", style: "display:flex;justify-content:space-between;gap:8px" }, el("span", {}, where), del),
     el("div", {}, ...p.tags.map(t => el("span", { className: "chip" }, t))),
     el("p", { style: "font-weight:600;margin:6px 0" }, p.summary),
     el("p", { className: "small muted", style: "margin:0 0 6px" }, `You said: “${n.text}”`),
@@ -567,21 +678,21 @@ function renderAdvice(n) {
     btn.onclick = () => {
       const events = rows.filter(r => r.tick.checked && r.date.value).map(r => ({
         date: r.date.value,
-        title: r.what.value.trim() || r.a.action,
-        approximate: r.a.approximate && r.date.value === r.a.due_date,
-        desc: `${n.visit?.garage ? "Advice from " + n.visit.garage + " on " + n.ref : "Mechanic's advice, noted " + n.ref}: “${r.a.quote || n.text}”`,
+        title: r.a.action,
+        approximate: r.a.approximate,
+        desc: `${n.garage ? "Advice from " + n.garage + " on " + n.ref : "Mechanic's advice, noted " + n.ref}: “${r.a.quote || n.text}”`,
       }));
       if (!events.length) { setStatus("Tick a reminder that has a date first.", "error", $("adviceStatus")); return; }
       downloadIcs(events);
     };
     block.append(btn);
   }
-  $("adviceList").prepend(block);
+  return block;
 }
 
 // All-day events with an alert a week ahead (two weeks if the date is approximate).
 function downloadIcs(events) {
-  const esc = s => s.replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
+  const esc = s => s.replace(/[\;,]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
   const fold = line => line.match(/.{1,73}/gu).join("\r\n ");
   const ymd = d => d.replaceAll("-", "");
   const nextDay = d => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };
@@ -589,7 +700,7 @@ function downloadIcs(events) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Porter demo//EN", "CALSCALE:GREGORIAN"];
   for (const e of events) {
     const title = e.title + (e.approximate ? " (approx. date)" : "");
-    lines.push("BEGIN:VEVENT", `UID:${crypto.randomUUID()}@porter-demo`, `DTSTAMP:${stamp}`,
+    lines.push("BEGIN:VEVENT", `UID:${newId()}@porter-demo`, `DTSTAMP:${stamp}`,
       `DTSTART;VALUE=DATE:${ymd(e.date)}`, `DTEND;VALUE=DATE:${ymd(nextDay(e.date))}`,
       `SUMMARY:${esc(title)}`, `DESCRIPTION:${esc(e.desc)}`,
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(title)}`, `TRIGGER:-P${e.approximate ? 14 : 7}D`, "END:VALARM",
@@ -597,10 +708,104 @@ function downloadIcs(events) {
   }
   lines.push("END:VCALENDAR");
   const url = URL.createObjectURL(new Blob([lines.map(fold).join("\r\n") + "\r\n"], { type: "text/calendar" }));
-  const a = el("a", { href: url, download: "porter-reminders.ics" });
-  a.click();
+  el("a", { href: url, download: "porter-reminders.ics" }).click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Selling mode: a sale-ready summary for buyers. The vehicle facts and the
+// service table come straight from the saved records; Claude only writes the
+// headline, selling points and known issues, from those same records.
+const SALE_SCHEMA = {"type": "object", "properties": {"headline": {"type": "string"}, "value_points": {"type": "array", "items": {"type": "string"}}, "known_issues": {"type": "array", "items": {"type": "string"}}}, "required": ["headline", "value_points", "known_issues"], "additionalProperties": false};
+const SALE_SYSTEM = "You write the summary a private seller gives buyers of their used car, from the\ncar's service records and the owner's notes of what mechanics told them. Use only\nfacts in the records; never invent work, parts, condition or history.\n\nheadline: one line with the year, make and model, mileage and the strongest true\nclaim about its history, e.g. \"2018 Ford Focus 1.0 EcoBoost, 48,210 miles, serviced\nevery year since 2019\". Only say \"full service history\" if the records show a\nservice at least every 15 months with no gaps.\n\nvalue_points: 3 to 6 concrete selling points, each with its month and year, e.g.\n\"Four new tyres, Oct 2026\", \"Cambelt and water pump replaced at 60,000 miles\".\nPrefer recent and expensive work, MOT passes without advisories, and regular\nservicing. Mention money only if costs are included in the records.\n\nknown_issues: an honest list of advisories and mechanic's advice that a later\nrecord does not show as fixed, with when it was raised and anything due soon\n(e.g. \"MOT due March 2027\"). Plain, factual wording; disclosure builds a buyer's\ntrust. Empty if there are none.\n\nBritish English, no exclamation marks, no sales clichés.";
+
+let sale = null;   // last Claude output, re-rendered when the options change
+
+function saleRecords() {
+  const costs = $("sellCosts").checked;
+  return {
+    today: todayIso(),
+    costs_included: costs,
+    documents: [...saved.visits].sort(byDateDesc).map(v => ({
+      date: v.date, type: v.doc_type, garage: v.garage_name, mileage: v.mileage, work: v.work_items,
+      parts: v.line_items.filter(l => l.category !== "labour").map(l => costs ? `${l.description} (£${l.line_total ?? "?"})` : l.description),
+      tyre_depths_mm: v.tyre_depths_mm, brake_wear: v.brake_wear, advisories: v.advisories, next_due: v.next_due,
+      ...(costs ? { total_cost: v.total_cost } : {}),
+    })),
+    mechanic_advice: saved.notes.map(n => ({ date: n.ref, garage: n.garage, said: n.text, actions: n.parsed.actions.map(a => a.action + (a.due_date ? ` (due ${a.due_date})` : "")) })),
+  };
+}
+
+$("sellBtn").onclick = async () => {
+  const status = $("sellStatus");
+  const key = apiKey(status);
+  if (!key) return;
+  const model = $("model").value;
+  const body = {
+    model, max_tokens: 4000, system: SALE_SYSTEM,
+    output_config: { effort: "medium", format: { type: "json_schema", schema: SALE_SCHEMA } },
+    messages: [{ role: "user", content: "Service records and notes:\n" + JSON.stringify(saleRecords(), null, 1) }],
+  };
+  $("sellBtn").disabled = true;
+  setStatus("Writing the sale summary…", "busy", status);
+  try {
+    const msg = await callClaude(key, body);
+    sale = { ...JSON.parse(msg.content.find(b => b.type === "text")?.text), costs: $("sellCosts").checked };
+    renderSale();
+    setStatus(`Done, ~$${costUsd(msg, model).toFixed(4)}. Check every line before you share it.`, "", status);
+  } catch (err) {
+    setStatus("Failed: " + err.message + failHint(err), "error", status);
+  } finally {
+    $("sellBtn").disabled = !saved.visits.length;
+  }
+};
+
+function vehicleFacts() {
+  const visits = [...saved.visits].sort(byDateDesc);
+  const first = k => visits.find(v => v[k])?.[k] || "";
+  const withMiles = visits.filter(v => v.mileage != null).sort((a, b) => b.mileage - a.mileage)[0];
+  return { make_model: first("make_model"), registration: first("registration"), vin: first("vin"),
+    first_registered: first("date_first_registered"), mileage: withMiles, visits };
+}
+
+function renderSale() {
+  if (!sale) return;
+  const f = vehicleFacts();
+  const showCosts = $("sellCosts").checked;
+  const dl = el("dl");
+  addField(dl, "Vehicle", f.make_model);
+  if ($("sellReg").checked && f.registration) addField(dl, "Registration", el("span", { className: "plate" }, f.registration));
+  if ($("sellVin").checked) addField(dl, "VIN", f.vin);
+  addField(dl, "First registered", f.first_registered);
+  if (f.mileage) addField(dl, "Mileage", `${f.mileage.mileage.toLocaleString()} miles${f.mileage.date ? " (" + f.mileage.date + ")" : ""}`);
+  const list = items => el("ul", {}, ...items.map(t => el("li", {}, t)));
+  const rows = f.visits.map(v => el("tr", {},
+    el("td", { style: "white-space:nowrap;padding-right:10px" }, v.date || "undated"),
+    el("td", {}, el("div", { style: "font-weight:600" }, v.garage_name || v.doc_type.replaceAll("_", " ")), el("div", { className: "muted small" }, workSummary(v))),
+    el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() : ""),
+    ...(showCosts ? [el("td", { className: "num" }, money(v.total_cost) || "")] : [])));
+  $("saleSheet").replaceChildren(
+    el("h3", { style: "margin:0 0 10px" }, sale.headline),
+    dl,
+    ...(sale.value_points.length ? [el("h4", {}, "Why it's a good one"), list(sale.value_points)] : []),
+    el("h4", {}, "Service history"),
+    el("table", {}, el("tbody", {}, el("tr", { className: "muted small" }, el("td", {}, "Date"), el("td", {}, "Garage and work"), el("td", { className: "num" }, "Miles"),
+      ...(showCosts ? [el("td", { className: "num" }, "Cost")] : [])), ...rows)),
+    el("h4", {}, "Known issues"),
+    sale.known_issues.length ? list(sale.known_issues) : el("p", { className: "small" }, "None recorded."),
+    el("p", { className: "muted small", style: "margin-top:14px" }, `From ${f.visits.length} service document${f.visits.length === 1 ? "" : "s"} recorded in Porter, ${todayIso()}. Owner's personal details are not included.`));
+  $("saleOut").hidden = false;
+  $("saleCostNote").hidden = showCosts === sale.costs;
+}
+["sellReg", "sellVin", "sellCosts"].forEach(id => $(id).onchange = renderSale);
+
+$("printBtn").onclick = () => window.print();
+$("copyBtn").onclick = async () => {
+  const text = $("saleSheet").innerText.replace(/\n{3,}/g, "\n\n");
+  try { await navigator.clipboard.writeText(text); setStatus("Copied. Paste it into your listing.", "", $("sellStatus")); }
+  catch { setStatus("Couldn't copy; select the text and copy it yourself.", "error", $("sellStatus")); }
+};
+
+renderHistory();
 </script>
 </body>
 </html>
