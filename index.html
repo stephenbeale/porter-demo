@@ -26,7 +26,7 @@ h1 { font-size: 1.5em; margin: 8px 0 2px; } h2 { font-size: 1.1em; margin: 0 0 1
 .muted { color: var(--muted); } .small { font-size: .85em; }
 .card { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; margin: 14px 0; }
 label { display: block; font-weight: 600; margin: 10px 0 4px; }
-input[type=password], input[type=text], select { width: 100%; padding: 12px; font-size: 16px; border-radius: 10px;
+input[type=password], input[type=text], input[type=date], select, textarea { width: 100%; padding: 12px; font-size: 16px; border-radius: 10px;
   border: 1px solid var(--rule); background: var(--bg); color: var(--text); }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { flex: 1 1 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px;
@@ -58,6 +58,12 @@ details summary { cursor: pointer; font-weight: 600; }
 #webcam video { width: 100%; border-radius: 10px; border: 1px solid var(--rule); background: #000; display: block; margin-top: 12px; }
 .pii li.flagged { color: var(--warn); }
 a { color: var(--accent); }
+textarea { font: inherit; resize: vertical; }
+.advice { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
+.chip { display: inline-block; font-size: .8em; padding: 1px 9px; border-radius: 99px; border: 1px solid var(--rule); color: var(--text-2); margin: 0 4px 4px 0; }
+.reminder { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.reminder input[type=checkbox] { width: 22px; height: 22px; margin-top: 12px; }
+.reminder input[type=date] { width: auto; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -132,6 +138,21 @@ a { color: var(--accent); }
       </details>
     </section>
   </section>
+
+  <section class="card" id="adviceCard">
+    <h2>3. What did the mechanic say?</h2>
+    <p class="muted small">Advice they gave you out loud but didn't write down, e.g. "your tyres will want doing by mid-November". AI picks out what to do and when, and suggests reminders.</p>
+    <p class="small" id="adviceLink"></p>
+    <label for="adviceText">In your own words</label>
+    <textarea id="adviceText" rows="4" placeholder="Type it, or tap Dictate and say it"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn secondary" id="dictateBtn" type="button">🎙 Dictate</button>
+      <button class="btn" id="adviceBtn" type="button" disabled>Save advice</button>
+    </div>
+    <p class="muted small" id="dictateNote">Dictate uses your browser's speech recognition (Chrome sends the audio to Google to transcribe it). Your phone keyboard's mic key works too. Notes are kept in this tab only and are gone on reload.</p>
+    <div class="status" id="adviceStatus" role="status" aria-live="polite"></div>
+    <div id="adviceList"></div>
+  </section>
 </main>
 
 <script>
@@ -158,12 +179,46 @@ $("forget").addEventListener("click", e => { e.preventDefault(); store.del("port
 let pages = [];   // { full: HTMLCanvasElement, small: HTMLCanvasElement }
 let result = null;
 
-function setStatus(msg, kind = "") {
-  $("status").className = "status " + kind;
-  $("status").replaceChildren();
-  if (kind === "busy") { const s = document.createElement("span"); s.className = "spinner"; $("status").append(s); }
-  $("status").append(document.createTextNode(msg));
+function setStatus(msg, kind = "", el = $("status")) {
+  el.className = "status " + kind;
+  el.replaceChildren();
+  if (kind === "busy") { const s = document.createElement("span"); s.className = "spinner"; el.append(s); }
+  el.append(document.createTextNode(msg));
 }
+
+function el(tag, props = {}, ...kids) {
+  const e = Object.assign(document.createElement(tag), props);
+  e.append(...kids);
+  return e;
+}
+
+function apiKey(statusEl) {
+  const key = $("key").value.trim();
+  if (!key) { setStatus("Enter your API key first.", "error", statusEl); $("key").focus(); return null; }
+  store.set("porter.key", key);
+  return key;
+}
+
+async function callClaude(key, body) {
+  const headers = {
+    "content-type": "application/json", "x-api-key": key, "anthropic-version": API_VERSION,
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+  if (FALLBACK_MODELS.has(body.model)) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
+  const resp = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
+  const msg = await resp.json();
+  if (!resp.ok) throw new Error(msg?.error?.message || `HTTP ${resp.status}`);
+  if (msg.stop_reason === "refusal") throw new Error("The model declined this request.");
+  if (msg.stop_reason === "max_tokens") throw new Error("Response was cut off; try a shorter input.");
+  return msg;
+}
+
+function costUsd(msg, model) {
+  const [pin, pout] = PRICES[model];
+  return (msg.usage.input_tokens * pin + msg.usage.output_tokens * pout) / 1e6;
+}
+
+const failHint = err => /authentication|x-api-key|invalid.*key/i.test(err.message) ? " Check your API key." : "";
 
 async function toCanvas(file, maxEdge) {
   // createImageBitmap honours EXIF orientation, so phone photos come out upright.
@@ -230,12 +285,12 @@ $("clearBtn").onclick = () => {
   closeWebcam();
   pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true;
   $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
+  updateAdviceLink();
 };
 
 $("scanBtn").onclick = async () => {
-  const key = $("key").value.trim();
-  if (!key) { setStatus("Enter your API key first.", "error"); $("key").focus(); return; }
-  store.set("porter.key", key);
+  const key = apiKey($("status"));
+  if (!key) return;
   const model = $("model").value;
   const content = [];
   pages.forEach((p, i) => {
@@ -249,32 +304,22 @@ $("scanBtn").onclick = async () => {
     output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
     messages: [{ role: "user", content }],
   };
-  const headers = {
-    "content-type": "application/json", "x-api-key": key, "anthropic-version": API_VERSION,
-    "anthropic-dangerous-direct-browser-access": "true",
-  };
-  if (FALLBACK_MODELS.has(model)) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
 
   $("scanBtn").disabled = true;
   setStatus("Reading the document… (10-60 seconds)", "busy");
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
-    const msg = await resp.json();
-    if (!resp.ok) throw new Error(msg?.error?.message || `HTTP ${resp.status}`);
-    if (msg.stop_reason === "refusal") throw new Error("The model declined this document.");
-    if (msg.stop_reason === "max_tokens") throw new Error("Response was cut off; try fewer pages.");
+    const msg = await callClaude(key, body);
     const text = msg.content.find(b => b.type === "text")?.text;
     result = JSON.parse(text);
     const added = crossCheck(result);
-    const [pin, pout] = PRICES[model];
-    const usd = (msg.usage.input_tokens * pin + msg.usage.output_tokens * pout) / 1e6;
+    const usd = costUsd(msg, model);
     $("usage").textContent = `${msg.model} · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
     render();
+    updateAdviceLink();
     setStatus(`Done: ${result.pii.length} personal-data box${result.pii.length === 1 ? "" : "es"}` +
       (added ? ` (${added} from the cross-check)` : "") + `, ~$${usd.toFixed(3)}.`);
   } catch (err) {
-    const hint = /authentication|x-api-key|invalid.*key/i.test(err.message) ? " Check your API key." : "";
-    setStatus("Failed: " + err.message + hint, "error");
+    setStatus("Failed: " + err.message + failHint(err), "error");
   } finally {
     $("scanBtn").disabled = pages.length === 0;
   }
@@ -415,6 +460,146 @@ function render() {
   $("conditionCard").hidden = !cond.childNodes.length;
   $("notes").textContent = r.notes;
   $("raw").textContent = JSON.stringify(r, null, 2);
+}
+
+// Verbal advice: what the mechanic said but didn't write down. Claude turns
+// the owner's words into actions with dates, which become calendar reminders.
+const ADVICE_SCHEMA = {"type": "object", "properties": {"tags": {"type": "array", "items": {"type": "string", "enum": ["service", "repair", "advice", "purchase", "general"]}}, "summary": {"type": "string", "description": "One line, plain words"}, "actions": {"type": "array", "items": {"type": "object", "properties": {"action": {"type": "string", "description": "What to do, e.g. Replace front tyres"}, "quote": {"type": "string", "description": "The owner's words this action comes from"}, "due_date": {"type": "string", "description": "YYYY-MM-DD, or empty if no date was given"}, "approximate": {"type": "boolean"}, "due_mileage": {"type": ["integer", "null"], "description": "Odometer reading it is due at, if a mileage was given"}}, "required": ["action", "quote", "due_date", "approximate", "due_mileage"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Anything unclear"}}, "required": ["tags", "summary", "actions", "notes"], "additionalProperties": false};
+const ADVICE_SYSTEM = "You turn what a mechanic told a car owner out loud into a note for the car's\nservice history. The owner types or dictates it in their own words after the\nvisit, so expect speech-recognition slips (\"tires\", \"break pads\").\n\nTag the note with every type that fits: service, repair, advice (a\nrecommendation or warning), purchase, general. Write a one-line summary.\n\nList each thing the owner should do or keep an eye on as an action, with the\nwords it came from. Only include what the mechanic actually said; never add\nadvice of your own.\n\nDates: resolve against the reference date given (the visit date), picking the\nnext occurrence on or after it. Exact dates are not approximate. Fuzzy ones are:\n\"early <month>\" = the 5th, \"mid-<month>\" = the 15th, \"end of <month>\" = the last\nday, \"in a couple of weeks\" = +14 days, \"in a few months\" = +3 months, \"before\nwinter\" = 1 November, \"in the spring\" = 1 March. For a mileage (\"in another 2,000\nmiles\") give the odometer reading in due_mileage if the current mileage is known;\notherwise leave it null and say so in notes. No date given: empty due_date.";
+
+const todayIso = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const currentVisit = () => result && { date: result.date, garage: result.garage_name, mileage: result.mileage, advisories: result.advisories };
+
+function updateAdviceLink() {
+  const v = currentVisit();
+  $("adviceLink").textContent = v
+    ? `Linked to: ${v.garage || "the scanned document"}${v.date ? ", visit on " + v.date : ""}.`
+    : "Not linked to a scan. Scan the invoice first to attach the advice to that visit, or save it on its own (dated today).";
+}
+updateAdviceLink();
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (!SR) {
+  $("dictateBtn").hidden = true;
+  $("dictateNote").textContent = "Tip: use your phone keyboard's mic key to dictate. Notes are kept in this tab only and are gone on reload.";
+}
+$("dictateBtn").onclick = () => {
+  if (rec) { rec.stop(); return; }
+  rec = new SR();
+  rec.lang = "en-GB"; rec.continuous = true; rec.interimResults = true;
+  const base = $("adviceText").value.trim();
+  rec.onresult = e => {
+    const heard = Array.from(e.results, r => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+    $("adviceText").value = (base ? base + " " : "") + heard;
+    $("adviceBtn").disabled = false;
+  };
+  rec.onerror = e => setStatus("Dictation stopped: " + e.error, "error", $("adviceStatus"));
+  rec.onend = () => {
+    rec = null; $("dictateBtn").textContent = "🎙 Dictate";
+    if ($("adviceStatus").textContent.startsWith("Listening")) setStatus("", "", $("adviceStatus"));
+  };
+  rec.start();
+  $("dictateBtn").textContent = "⏹ Stop";
+  setStatus("Listening… say what the mechanic told you.", "", $("adviceStatus"));
+};
+$("adviceText").oninput = () => { $("adviceBtn").disabled = !$("adviceText").value.trim(); };
+
+$("adviceBtn").onclick = async () => {
+  rec?.stop();
+  const status = $("adviceStatus");
+  const key = apiKey(status);
+  const text = $("adviceText").value.trim();
+  if (!key || !text) return;
+  const model = $("model").value;
+  const visit = currentVisit();
+  const ref = visit?.date || todayIso();
+  const context = [
+    `Reference date: ${ref}`,
+    visit ? `Visit: ${visit.garage || "unknown garage"}, mileage ${visit.mileage ?? "unknown"}` : "Not linked to a visit; current mileage unknown.",
+    visit?.advisories.length ? "Advisories printed on the document: " + visit.advisories.join("; ") : "",
+    `What the mechanic said, in the owner's words:\n"""${text}"""`,
+  ].filter(Boolean).join("\n");
+  const body = {
+    model, max_tokens: 4000, system: ADVICE_SYSTEM,
+    output_config: { effort: "low", format: { type: "json_schema", schema: ADVICE_SCHEMA } },
+    messages: [{ role: "user", content: context }],
+  };
+  $("adviceBtn").disabled = true;
+  setStatus("Reading the advice…", "busy", status);
+  try {
+    const msg = await callClaude(key, body);
+    const parsed = JSON.parse(msg.content.find(b => b.type === "text")?.text);
+    renderAdvice({ text, ref, visit, parsed });
+    $("adviceText").value = "";
+    const dated = parsed.actions.filter(a => a.due_date).length;
+    setStatus(`Saved: ${parsed.actions.length} action${parsed.actions.length === 1 ? "" : "s"}, ${dated} with a date. ~$${costUsd(msg, model).toFixed(4)}.`, "", status);
+  } catch (err) {
+    setStatus("Failed: " + err.message + failHint(err), "error", status);
+    $("adviceBtn").disabled = false;
+  }
+};
+
+function renderAdvice(n) {
+  const p = n.parsed;
+  const where = n.visit ? `${n.visit.garage || "Scanned visit"} · ${n.ref}` : `Not linked to a scan · ${n.ref}`;
+  const rows = p.actions.map(a => {
+    const tick = el("input", { type: "checkbox", checked: !!a.due_date, ariaLabel: "Add to calendar" });
+    const what = el("input", { type: "text", value: a.action, ariaLabel: "Reminder" });
+    const date = el("input", { type: "date", value: a.due_date, ariaLabel: "Due date" });
+    date.oninput = () => { if (date.value) tick.checked = true; };
+    const meta = [
+      a.approximate && a.due_date ? "≈ approximate date" : "",
+      a.due_mileage != null ? `or at ${a.due_mileage.toLocaleString()} miles` : "",
+      a.quote ? `“${a.quote}”` : "",
+    ].filter(Boolean).join(" · ");
+    return { tick, what, date, a, row: el("div", { className: "reminder" }, tick, el("div", {}, what, date, el("div", { className: "small muted" }, meta))) };
+  });
+  const block = el("div", { className: "advice" },
+    el("div", { className: "small muted" }, where),
+    el("div", {}, ...p.tags.map(t => el("span", { className: "chip" }, t))),
+    el("p", { style: "font-weight:600;margin:6px 0" }, p.summary),
+    el("p", { className: "small muted", style: "margin:0 0 6px" }, `You said: “${n.text}”`),
+    ...(rows.length ? rows.map(r => r.row) : [el("p", { className: "small" }, "No actions or dates found.")]),
+    ...(p.notes ? [el("p", { className: "small note" }, p.notes)] : []));
+  if (rows.length) {
+    const btn = el("button", { className: "btn secondary", type: "button", style: "margin-top:10px;width:100%" }, "📅 Add ticked to calendar (.ics)");
+    btn.onclick = () => {
+      const events = rows.filter(r => r.tick.checked && r.date.value).map(r => ({
+        date: r.date.value,
+        title: r.what.value.trim() || r.a.action,
+        approximate: r.a.approximate && r.date.value === r.a.due_date,
+        desc: `${n.visit?.garage ? "Advice from " + n.visit.garage + " on " + n.ref : "Mechanic's advice, noted " + n.ref}: “${r.a.quote || n.text}”`,
+      }));
+      if (!events.length) { setStatus("Tick a reminder that has a date first.", "error", $("adviceStatus")); return; }
+      downloadIcs(events);
+    };
+    block.append(btn);
+  }
+  $("adviceList").prepend(block);
+}
+
+// All-day events with an alert a week ahead (two weeks if the date is approximate).
+function downloadIcs(events) {
+  const esc = s => s.replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
+  const fold = line => line.match(/.{1,73}/gu).join("\r\n ");
+  const ymd = d => d.replaceAll("-", "");
+  const nextDay = d => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Porter demo//EN", "CALSCALE:GREGORIAN"];
+  for (const e of events) {
+    const title = e.title + (e.approximate ? " (approx. date)" : "");
+    lines.push("BEGIN:VEVENT", `UID:${crypto.randomUUID()}@porter-demo`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${ymd(e.date)}`, `DTEND;VALUE=DATE:${ymd(nextDay(e.date))}`,
+      `SUMMARY:${esc(title)}`, `DESCRIPTION:${esc(e.desc)}`,
+      "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(title)}`, `TRIGGER:-P${e.approximate ? 14 : 7}D`, "END:VALARM",
+      "END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  const url = URL.createObjectURL(new Blob([lines.map(fold).join("\r\n") + "\r\n"], { type: "text/calendar" }));
+  const a = el("a", { href: url, download: "porter-reminders.ics" });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 </script>
 </body>
