@@ -67,6 +67,8 @@ textarea { font: inherit; resize: vertical; }
 label.check { display: flex; align-items: center; gap: 10px; font-weight: 500; margin: 8px 0; }
 label.check input { width: 20px; height: 20px; margin: 0; }
 .linkbtn { background: none; border: 0; padding: 4px 6px; color: var(--accent); cursor: pointer; font: inherit; }
+#checkCanvases canvas { touch-action: pan-y; cursor: pointer; }
+#checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
 .feedback { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
 .sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
 .sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
@@ -95,7 +97,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 <body>
 <main>
   <h1>Porter <span class="muted small">demo</span></h1>
-  <p class="muted small">Scan a service invoice, MOT certificate or receipt. AI reads the details and finds personal data to black out.</p>
+  <p class="muted small">Scan a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
 
   <section class="card" id="installTip" hidden>
     <h2>Add Porter to your Home Screen</h2>
@@ -110,12 +112,12 @@ label.check input { width: 20px; height: 20px; margin: 0; }
       <label for="invite">Invite code</label>
       <input id="invite" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. alice-7f3k">
       <p class="small" id="inviteStatus"></p>
-      <p class="muted small">Your photos and notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
+      <p class="muted small">Pages are blacked out on this phone first, then they and your notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
     </div>
     <div id="keyBox">
       <label for="key">Anthropic API key</label>
       <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
-      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Your photos go straight from this phone to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
+      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are blacked out on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
     </div>
     <label for="model">Model</label>
     <select id="model">
@@ -147,6 +149,23 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
 
+  <section class="card" id="deviceCheck" hidden>
+    <h2>Check before sending</h2>
+    <p class="small"><b>Nothing has been sent yet.</b> Your phone found these personal details and will black them out before the pages leave it.</p>
+    <ul class="small" style="margin:6px 0 10px;padding-left:20px">
+      <li>Tap a box to uncover it, e.g. the garage's own address, which AI needs to read.</li>
+      <li>Missed something, like a signature? Tap <b>Draw a box</b>, then drag across it.</li>
+    </ul>
+    <div class="row" style="margin-bottom:10px"><button class="btn secondary" id="drawBtn" type="button" aria-pressed="false">✏️ Draw a box</button></div>
+    <div id="checkCanvases"></div>
+    <p class="muted small" id="checkSummary"></p>
+    <div class="row">
+      <button class="btn" id="sendBtn" type="button">Send blacked-out pages</button>
+      <button class="btn secondary" id="backBtn" type="button">Back</button>
+    </div>
+    <div class="status" id="checkStatus" role="status" aria-live="polite"></div>
+  </section>
+
   <section id="results" hidden>
     <section class="card">
       <h2>Redaction</h2>
@@ -155,7 +174,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
         <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer sees</button>
       </div>
       <div id="canvases"></div>
-      <p class="muted small note">Orange boxes are numbers that match personal data found on this or an earlier scan in this session (e.g. the end of a phone number peeking out from under a receipt). AI boxes are suggestions. Check every page for anything missed before sharing.</p>
+      <p class="muted small note">Red boxes were blacked out on your phone before sending. Purple boxes are personal details AI spotted in what was sent (your phone missed them, so AI saw them); they're covered now for sharing. Orange boxes match personal data from this or an earlier scan, such as the end of a phone number peeking out from under a receipt. Check every page before sharing.</p>
       <ul class="pii small" id="piiList"></ul>
       <div class="row">
         <button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button>
@@ -262,7 +281,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 
 <script>
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": ["integer", "null"]}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "enum": ["engine_oil", "oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs", "brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid", "coolant", "timing_belt", "aux_belt", "tyre", "battery", "bulb", "wipers", "clutch", "exhaust", "suspension", "screenwash", "mot_test", "labour", "diagnostics", "other"]}, "quantity": {"type": ["number", "null"]}, "unit_price": {"type": ["number", "null"]}, "line_total": {"type": ["number", "null"]}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": ["number", "null"]}, "osf": {"type": ["number", "null"]}, "nsr": {"type": ["number", "null"]}, "osr": {"type": ["number", "null"]}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": ["number", "null"]}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": ["number", "null"], "description": "Grand total as PRINTED on the document (incl. VAT). Null if not printed or illegible - never compute it from line items."}, "amount_paid": {"type": ["number", "null"], "description": "Amount charged, e.g. on a card receipt"}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes"], "additionalProperties": false};
-const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
+const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
 const MAX_EDGE = 1568;
 const PRICES = { "claude-opus-5-5": [4, 20], "claude-haiku-5-5": [0.10, 0.50] };
@@ -398,6 +417,7 @@ async function addFiles(fileList) {
     } catch (err) { setStatus("Couldn't read that image: " + err.message, "error"); }
   }
   $("scanBtn").disabled = $("clearBtn").disabled = pages.length === 0;
+  $("deviceCheck").hidden = true;
   if (pages.length) setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or scan.`);
 }
 
@@ -437,20 +457,219 @@ $("camera").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("files").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("clearBtn").onclick = () => {
   closeWebcam();
-  pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true;
+  pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true; $("deviceCheck").hidden = true;
   lastVisitId = "";
   $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
 };
 
+// Step 1, on the phone: read the text with Tesseract (OCR in the browser; the
+// page images never leave the device for this) and box the personal details.
+const TESSERACT = {
+  script: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+  integrity: "sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F",
+  workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+  corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
+  langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int",
+};
+let ocrWorker = null, ocrProgress = () => {};
+function loadScript(src, integrity) {
+  return new Promise((res, rej) => {
+    const sc = el("script", { src, crossOrigin: "anonymous", integrity });
+    sc.onload = res; sc.onerror = () => rej(new Error("couldn't load the on-phone text reader"));
+    document.head.append(sc);
+  });
+}
+async function getOcr() {
+  if (!ocrWorker) {
+    if (!window.Tesseract) await loadScript(TESSERACT.script, TESSERACT.integrity);
+    ocrWorker = await Tesseract.createWorker("eng", 1, {
+      workerPath: TESSERACT.workerPath, corePath: TESSERACT.corePath, langPath: TESSERACT.langPath,
+      logger: m => ocrProgress(m),
+    });
+  }
+  return ocrWorker;
+}
+
+const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact)\b\s*:?/i;
+const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
+const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d[d.length - 1 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
+
+// Personal-data boxes from Tesseract's lines, in the image's pixel space.
+// Over-boxing is the safe failure: the owner uncovers anything that's fine.
+function findPersonalData(data, page) {
+  const lines = [];
+  for (const b of data.blocks || []) for (const para of b.paragraphs) for (const l of para.lines) {
+    let text = "", spans = [];
+    for (const w of l.words) { text += (text ? " " : "") + w.text; spans.push({ w, start: text.length - w.text.length, end: text.length }); }
+    lines.push({ text, spans, bbox: l.bbox });
+  }
+  // Geometry, not Tesseract's paragraphs (which split address blocks apart):
+  // the lines stacked directly above, and the line directly below.
+  const lh = l => l.bbox.y1 - l.bbox.y0;
+  const above = l => lines.filter(o => o !== l && o.bbox.y1 <= l.bbox.y0 + 0.3 * lh(l) && l.bbox.y0 - o.bbox.y1 < 1.2 * lh(l)
+    && Math.abs(o.bbox.x0 - l.bbox.x0) < 2 * lh(l)).sort((a, b) => b.bbox.y1 - a.bbox.y1)[0];
+  const below = l => lines.filter(o => o !== l && o.bbox.y0 >= l.bbox.y1 - 0.3 * lh(l) && o.bbox.y0 - l.bbox.y1 < 1.5 * lh(l)
+    && o.bbox.x0 < l.bbox.x1 && o.bbox.x1 > l.bbox.x0).sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
+  const boxes = [];
+  const add = (bbox, category, text) => boxes.push({ page, category, text, x0: bbox.x0, y0: bbox.y0, x1: bbox.x1, y1: bbox.y1, source: "device", on: true });
+  const union = ws => ({ x0: Math.min(...ws.map(w => w.bbox.x0)), y0: Math.min(...ws.map(w => w.bbox.y0)), x1: Math.max(...ws.map(w => w.bbox.x1)), y1: Math.max(...ws.map(w => w.bbox.y1)) });
+  const boxMatch = (line, re, category, ok = () => true) => {
+    for (const m of line.text.matchAll(re)) {
+      if (!ok(m[0], line)) continue;
+      const ws = line.spans.filter(s => s.end > m.index && s.start < m.index + m[0].length).map(s => s.w);
+      if (ws.length) add(union(ws), category, m[0]);
+    }
+  };
+  const digitsOf = t => t.replace(/\D/g, "");
+  for (const line of lines) {
+    const t = line.text;
+    boxMatch(line, /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "email");
+    boxMatch(line, /(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; });
+    boxMatch(line, /\b(?:\d[ -]?){13,19}\b/g, "account_or_card_number", m => luhn(digitsOf(m)));
+    boxMatch(line, /(?:\*{2,}|[xX]{3,})[\s-]?\d{4}\b/g, "account_or_card_number");
+    if (/sort|account|acct|a\/c/i.test(t)) boxMatch(line, /\b\d{2}-\d{2}-\d{2}\b|\b\d{8}\b/g, "account_or_card_number");
+    boxMatch(line, /\b\d{4}\s?\d{3}\s?\d{4}\b|\b\d{11}\b/g, "v5c_document_reference", m => !/^0/.test(m));
+    boxMatch(line, /\b(?:Mr|Mrs|Ms|Miss|Mx|Dr)\.?\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3}/g, "person_name");
+    // A postcode: box its line and the address lines stacked above it.
+    if (/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i.test(t)) {
+      add(line.bbox, "address", t);
+      for (let up = above(line), n = 0; up && n < 3 && !NOT_ADDRESS.test(up.text); up = above(up), n++) add(up.bbox, "address", up.text);
+    }
+    // "Customer: Jane Smith": box what follows the label, or the line below if nothing does.
+    const isSignature = /\b(signature|signed|sign here)\b/i.test(t);
+    const lab = !isSignature && t.match(LABEL_NAME);
+    if (lab) {
+      const after = line.spans.filter(s => s.start >= lab.index + lab[0].length).map(s => s.w);
+      const stop = after.findIndex(w => /:$/.test(w.text));
+      const ws = (stop >= 0 ? after.slice(0, stop) : after).slice(0, 5);
+      const next = !after.length && below(line);
+      if (ws.length) add(union(ws), "person_name", ws.map(w => w.text).join(" "));
+      else if (next) add(next.bbox, "person_name", next.text);
+    }
+    // Signatures can't be read; cover the label's line and the space beside and below it.
+    if (isSignature) {
+      const h = line.bbox.y1 - line.bbox.y0;
+      add({ x0: line.bbox.x0, y0: line.bbox.y0, x1: line.bbox.x1 + 6 * h, y1: line.bbox.y1 + 3 * h }, "signature", t);
+    }
+  }
+  const seen = new Set();
+  return boxes.filter(b => { const k = [b.x0, b.y0, b.x1, b.y1].join(); return !seen.has(k) && seen.add(k); });
+}
+
 $("scanBtn").onclick = async () => {
-  const cred = credentials($("status"));
+  if (!credentials($("status"))) return;
+  $("scanBtn").disabled = true;
+  $("results").hidden = true;
+  let ocrFailed = null;
+  try {
+    setStatus("Loading the on-phone text reader (about 7 MB, first time only)…", "busy");
+    const worker = await getOcr();
+    for (const [i, p] of pages.entries()) {
+      ocrProgress = m => { if (m.status === "recognizing text") setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy"); };
+      const { data } = await worker.recognize(p.small, {}, { blocks: true });
+      p.local = findPersonalData(data, i + 1);
+    }
+  } catch (err) {
+    ocrFailed = err;
+    pages.forEach(p => { p.local = p.local || []; });
+  } finally {
+    ocrProgress = () => {};
+    $("scanBtn").disabled = pages.length === 0;
+  }
+  setStatus("");
+  showDeviceCheck();
+  if (ocrFailed) {
+    setDrawing(true);
+    setStatus(`Your phone couldn't look for personal details (${ocrFailed.message}). Cover them yourself: drag across each one before sending.`, "error", $("checkStatus"));
+  }
+  $("deviceCheck").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+// Step 2: the owner checks the boxes. Tap toggles a box; in draw mode, drag adds one.
+let drawing = false;
+function setDrawing(on) {
+  drawing = on;
+  $("drawBtn").setAttribute("aria-pressed", on);
+  $("drawBtn").textContent = on ? "✓ Done drawing" : "✏️ Draw a box";
+  $("checkCanvases").classList.toggle("drawing", on);
+}
+$("drawBtn").onclick = () => setDrawing(!drawing);
+$("backBtn").onclick = () => { $("deviceCheck").hidden = true; setDrawing(false); };
+
+function paintCheck(c, p, draft) {
+  const ctx = c.getContext("2d");
+  ctx.drawImage(p.small, 0, 0);
+  const lw = Math.max(2, c.width / 400);
+  for (const b of p.local) {
+    if (b.on) { ctx.fillStyle = "rgba(0,0,0,.62)"; ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0); ctx.setLineDash([]); ctx.strokeStyle = "#dc0000"; }
+    else { ctx.setLineDash([6, 4]); ctx.strokeStyle = "#7a786f"; }
+    ctx.lineWidth = lw; ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  }
+  if (draft) { ctx.setLineDash([]); ctx.strokeStyle = "#1f6feb"; ctx.lineWidth = lw; ctx.strokeRect(draft.x0, draft.y0, draft.x1 - draft.x0, draft.y1 - draft.y0); }
+  ctx.setLineDash([]);
+}
+
+function checkSummary() {
+  const all = pages.flatMap(p => p.local);
+  const on = all.filter(b => b.on).length;
+  $("checkSummary").textContent = `${on} area${on === 1 ? "" : "s"} will be blacked out` +
+    (all.length > on ? `, ${all.length - on} uncovered by you` : "") + ". Faint boxes turn solid black when sent.";
+}
+
+function showDeviceCheck() {
+  $("checkCanvases").replaceChildren(...pages.map((p, i) => {
+    const c = el("canvas", { width: p.small.width, height: p.small.height, ariaLabel: `Page ${i + 1}` });
+    paintCheck(c, p);
+    const at = e => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; };
+    let start = null;
+    c.onpointerdown = e => { start = at(e); if (drawing) c.setPointerCapture(e.pointerId); };
+    c.onpointermove = e => {
+      if (!drawing || !start) return;
+      const q = at(e);
+      paintCheck(c, p, { x0: Math.min(start.x, q.x), y0: Math.min(start.y, q.y), x1: Math.max(start.x, q.x), y1: Math.max(start.y, q.y) });
+    };
+    c.onpointerup = e => {
+      if (!start) return;
+      const q = at(e), moved = Math.hypot(q.x - start.x, q.y - start.y);
+      if (drawing && moved > 8) {
+        p.local.push({ page: i + 1, category: "other_personal", text: "", source: "user", on: true,
+          x0: Math.min(start.x, q.x), y0: Math.min(start.y, q.y), x1: Math.max(start.x, q.x), y1: Math.max(start.y, q.y) });
+      } else if (moved <= 8) {
+        const hit = [...p.local].reverse().find(b => q.x >= b.x0 && q.x <= b.x1 && q.y >= b.y0 && q.y <= b.y1);
+        if (hit) hit.on = !hit.on;
+      }
+      start = null;
+      paintCheck(c, p); checkSummary();
+    };
+    return c;
+  }));
+  checkSummary();
+  setStatus("", "", $("checkStatus"));
+  $("deviceCheck").hidden = false;
+}
+
+// Step 3: only the blacked-out pages leave the phone.
+function blackedOut(p) {
+  const c = el("canvas", { width: p.small.width, height: p.small.height });
+  const ctx = c.getContext("2d");
+  ctx.drawImage(p.small, 0, 0);
+  ctx.fillStyle = "#000";
+  const pad = 2;
+  for (const b of p.local.filter(b => b.on)) ctx.fillRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad);
+  return c;
+}
+
+$("sendBtn").onclick = async () => {
+  const status = $("checkStatus");
+  const cred = credentials(status);
   if (!cred) return;
+  setDrawing(false);
   const model = $("model").value;
   const content = [];
   pages.forEach((p, i) => {
     content.push({ type: "text", text: `Page ${i + 1} (${p.small.width}x${p.small.height} pixels):` });
     content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg",
-      data: p.small.toDataURL("image/jpeg", 0.9).split(",")[1] } });
+      data: blackedOut(p).toDataURL("image/jpeg", 0.9).split(",")[1] } });
   });
   content.push({ type: "text", text: "Extract the fields and personal-data boxes." });
   const body = {
@@ -459,23 +678,30 @@ $("scanBtn").onclick = async () => {
     messages: [{ role: "user", content }],
   };
 
-  $("scanBtn").disabled = true;
-  setStatus("Reading the document… (10-60 seconds)", "busy");
+  $("sendBtn").disabled = true;
+  setStatus("Reading the blacked-out pages… (10-60 seconds)", "busy", status);
   try {
     const msg = await callClaude(cred, body);
     const text = msg.content.find(b => b.type === "text")?.text;
     result = JSON.parse(text);
+    const aiFound = result.pii.length;
+    result.pii.forEach(p => { p.source = "ai"; });
+    result.pii.unshift(...pages.flatMap(p => p.local.filter(b => b.on).map(({ on, ...b }) => b)));
     const added = crossCheck(result);
     const usd = costUsd(msg, model);
     $("usage").textContent = `${msg.model} · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
+    $("deviceCheck").hidden = true;
     render();
     saveVisit(result);
-    setStatus(`Done: ${result.pii.length} personal-data box${result.pii.length === 1 ? "" : "es"}` +
-      (added ? ` (${added} from the cross-check)` : "") + `, ~$${usd.toFixed(3)}. Saved to your history.`);
+    setStatus(aiFound
+      ? `Done, but AI spotted ${aiFound} personal detail${aiFound === 1 ? "" : "s"} your phone missed (purple boxes). They were in what was sent; they're covered now for sharing. ~$${usd.toFixed(3)}.`
+      : `Done: your phone covered everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. ~$${usd.toFixed(3)}. Saved to your history.`,
+      aiFound ? "error" : "");
+    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
-    setStatus("Failed: " + err.message + failHint(err), "error");
+    setStatus("Failed: " + err.message + failHint(err), "error", status);
   } finally {
-    $("scanBtn").disabled = pages.length === 0;
+    $("sendBtn").disabled = false;
   }
 };
 
@@ -519,7 +745,7 @@ function drawPage(i, view) {
   ctx.drawImage(page.full, 0, 0);
   for (const b of boxesFor(i, page)) {
     if (view === "redacted") { ctx.fillStyle = "#000"; ctx.fillRect(b.x, b.y, b.w, b.h); }
-    else { ctx.strokeStyle = b.source === "cross_check" ? "#ff8c00" : "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
+    else { ctx.strokeStyle = { cross_check: "#ff8c00", ai: "#a020f0" }[b.source] || "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
   }
   return c;
 }
@@ -561,8 +787,9 @@ function render() {
   renderCanvases();
   $("piiList").replaceChildren(...r.pii.map(p => {
     const li = document.createElement("li");
-    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")}` + (p.source === "cross_check" ? " (cross-check)" : "");
-    if (p.source === "cross_check") li.className = "flagged";
+    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")} · ` +
+      ({ cross_check: "cross-check", ai: "spotted by AI after sending", user: "you drew it" }[p.source] || "covered on your phone");
+    if (p.source === "cross_check" || p.source === "ai") li.className = "flagged";
     return li;
   }));
 
