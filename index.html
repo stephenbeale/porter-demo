@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#1f6feb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Porter">
 <title>Porter Demo</title>
 <style>
 :root {
@@ -26,7 +31,7 @@ h1 { font-size: 1.5em; margin: 8px 0 2px; } h2 { font-size: 1.1em; margin: 0 0 1
 .muted { color: var(--muted); } .small { font-size: .85em; }
 .card { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; margin: 14px 0; }
 label { display: block; font-weight: 600; margin: 10px 0 4px; }
-input[type=password], input[type=text], select { width: 100%; padding: 12px; font-size: 16px; border-radius: 10px;
+input[type=password], input[type=text], input[type=date], select, textarea { width: 100%; padding: 12px; font-size: 16px; border-radius: 10px;
   border: 1px solid var(--rule); background: var(--bg); color: var(--text); }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { flex: 1 1 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px;
@@ -58,23 +63,67 @@ details summary { cursor: pointer; font-weight: 600; }
 #webcam video { width: 100%; border-radius: 10px; border: 1px solid var(--rule); background: #000; display: block; margin-top: 12px; }
 .pii li.flagged { color: var(--warn); }
 a { color: var(--accent); }
+textarea { font: inherit; resize: vertical; }
+label.check { display: flex; align-items: center; gap: 10px; font-weight: 500; margin: 8px 0; }
+label.check input { width: 20px; height: 20px; margin: 0; }
+.linkbtn { background: none; border: 0; padding: 4px 6px; color: var(--accent); cursor: pointer; font: inherit; }
+#checkCanvases canvas { touch-action: pan-y; cursor: pointer; }
+#checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
+.feedback { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
+.sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
+.sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
+.docs { display: flex; gap: 8px; flex-wrap: wrap; }
+.docs figure { margin: 0; } .docs figcaption { font-size: .75em; color: var(--muted); max-width: 120px; }
+.docs canvas { height: 150px; width: auto; margin: 0 0 2px; }
+@media print {
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  main > :not(#sellCard), #sellCard > :not(#saleOut), #saleOut > :not(#saleSheet) { display: none !important; }
+  #sellCard, #saleSheet { border: 0; padding: 0; margin: 0; background: #fff; }
+  #saleSheet * { color: #000 !important; }
+  .docs { display: block; }
+  .docs figure { break-before: page; }
+  .docs figcaption { max-width: none; font-size: 10pt; margin-bottom: 6px; }
+  .docs canvas { width: 100%; height: auto; max-height: 25cm; object-fit: contain; border: 0; }
+  .plate { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+.advice { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
+.chip { display: inline-block; font-size: .8em; padding: 1px 9px; border-radius: 99px; border: 1px solid var(--rule); color: var(--text-2); margin: 0 4px 4px 0; }
+.reminder { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.reminder input[type=checkbox] { width: 22px; height: 22px; margin-top: 12px; }
+.reminder input[type=date] { width: auto; margin-top: 6px; }
 </style>
 </head>
 <body>
 <main>
   <h1>Porter <span class="muted small">demo</span></h1>
-  <p class="muted small">Scan a service invoice, MOT certificate or receipt. AI reads the details and finds personal data to black out.</p>
+  <p class="muted small">Scan a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
+
+  <section class="card" id="installTip" hidden>
+    <h2>Add Porter to your Home Screen</h2>
+    <p class="small">On iPhone, tap Share <span aria-hidden="true">⬆</span> then <b>Add to Home Screen</b>, and open Porter from there. Safari deletes a website's saved data after 7 days without a visit; Home Screen apps keep theirs.</p>
+    <p class="small muted">The Home Screen app has its own storage. If you've already saved history here, tap <b>Back up</b> under "Your car's history" first, then <b>Restore</b> it in the app.</p>
+    <div class="row"><button class="btn secondary" id="installDismiss" type="button">Got it</button></div>
+  </section>
 
   <section class="card" id="settings">
-    <h2>1. Your Anthropic API key</h2>
-    <label for="key">API key</label>
-    <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+    <h2>1. Connect</h2>
+    <div id="inviteBox" hidden>
+      <label for="invite">Invite code</label>
+      <input id="invite" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. alice-7f3k">
+      <p class="small" id="inviteStatus"></p>
+      <p class="muted small">Pages are blacked out on this phone first, then they and your notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
+    </div>
+    <div id="keyBox">
+      <label for="key">Anthropic API key</label>
+      <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are blacked out on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
+    </div>
     <label for="model">Model</label>
     <select id="model">
       <option value="claude-opus-5-5">Opus 5.5: most accurate, ~4-7¢ per document</option>
       <option value="claude-haiku-5-5">Haiku 5.5: cheapest, ~0.1¢ per page</option>
     </select>
-    <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Your photos go straight from this phone to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a></p>
   </section>
 
   <section class="card">
@@ -100,6 +149,23 @@ a { color: var(--accent); }
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
 
+  <section class="card" id="deviceCheck" hidden>
+    <h2>Check before sending</h2>
+    <p class="small"><b>Nothing has been sent yet.</b> Your phone found these personal details and will black them out before the pages leave it.</p>
+    <ul class="small" style="margin:6px 0 10px;padding-left:20px">
+      <li>Tap a box to uncover it, e.g. the garage's own address, which AI needs to read.</li>
+      <li>Missed something, like a signature? Tap <b>Draw a box</b>, then drag across it.</li>
+    </ul>
+    <div class="row" style="margin-bottom:10px"><button class="btn secondary" id="drawBtn" type="button" aria-pressed="false">✏️ Draw a box</button></div>
+    <div id="checkCanvases"></div>
+    <p class="muted small" id="checkSummary"></p>
+    <div class="row">
+      <button class="btn" id="sendBtn" type="button">Send blacked-out pages</button>
+      <button class="btn secondary" id="backBtn" type="button">Back</button>
+    </div>
+    <div class="status" id="checkStatus" role="status" aria-live="polite"></div>
+  </section>
+
   <section id="results" hidden>
     <section class="card">
       <h2>Redaction</h2>
@@ -108,9 +174,26 @@ a { color: var(--accent); }
         <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer sees</button>
       </div>
       <div id="canvases"></div>
-      <p class="muted small note">Orange boxes are numbers that match personal data found on this or an earlier scan in this session (e.g. the end of a phone number peeking out from under a receipt). AI boxes are suggestions. Check every page for anything missed before sharing.</p>
+      <p class="muted small note">Red boxes were blacked out on your phone before sending. Purple boxes are personal details AI spotted in what was sent (your phone missed them, so AI saw them); they're covered now for sharing. Orange boxes match personal data from this or an earlier scan, such as the end of a phone number peeking out from under a receipt. Check every page before sharing.</p>
       <ul class="pii small" id="piiList"></ul>
-      <div class="row"><button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button></div>
+      <div class="row">
+        <button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button>
+        <button class="btn secondary" id="keepBtn" type="button">📎 Keep for selling</button>
+      </div>
+      <p class="muted small" id="keepNote">Checked the boxes? Keep a redacted copy with this visit so Selling mode can attach it for buyers.</p>
+      <div class="feedback" id="fbBox">
+        <p style="font-weight:600;margin:0 0 8px">Were all your personal details covered?</p>
+        <div class="row">
+          <button class="btn secondary" id="fbYes" type="button">👍 Yes, all covered</button>
+          <button class="btn secondary" id="fbNo" type="button">Missed something</button>
+        </div>
+        <div id="fbMore" hidden>
+          <label for="fbComment">What was missed? (optional, don't type the personal details themselves)</label>
+          <textarea id="fbComment" rows="2" placeholder="e.g. my phone number on the back page"></textarea>
+          <div class="row" style="margin-top:8px"><button class="btn" id="fbSend" type="button">Send</button></div>
+        </div>
+        <p class="small muted" id="fbThanks" hidden></p>
+      </div>
     </section>
     <section class="card">
       <h2>Details</h2>
@@ -132,11 +215,73 @@ a { color: var(--accent); }
       </details>
     </section>
   </section>
+
+  <section class="card" id="motCard">
+    <h2>Or import your MOT history</h2>
+    <p class="muted small">Every MOT test on record for your car, with mileage, advisories and failures, from DVSA. Plus road tax and MOT due dates from DVLA.</p>
+    <label for="motReg">Registration</label>
+    <input id="motReg" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AB12 CDE">
+    <div class="row" style="margin-top:10px"><button class="btn" id="motBtn" type="button">Import</button></div>
+    <p class="muted small" id="motNeedsServer" hidden>Needs an invite code: MOT lookups go through Porter's beta server.</p>
+    <div class="status" id="motStatus" role="status" aria-live="polite"></div>
+    <div id="dueDates"></div>
+  </section>
+
+  <section class="card" id="adviceCard">
+    <h2>3. What did the mechanic say?</h2>
+    <p class="muted small">Advice they gave you out loud but didn't write down, e.g. "your tyres will want doing by mid-November". AI picks out what to do and when, and suggests reminders.</p>
+    <label for="adviceVisit">From which visit?</label>
+    <select id="adviceVisit"></select>
+    <label for="adviceText">In your own words</label>
+    <textarea id="adviceText" rows="4" placeholder="Type it, or tap Dictate and say it"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn secondary" id="dictateBtn" type="button">🎙 Dictate</button>
+      <button class="btn" id="adviceBtn" type="button" disabled>Save advice</button>
+    </div>
+    <p class="muted small" id="dictateNote">Dictate uses your browser's speech recognition (Chrome sends the audio to Google to transcribe it). Your phone keyboard's mic key works too.</p>
+    <div class="status" id="adviceStatus" role="status" aria-live="polite"></div>
+    <div id="adviceList"></div>
+  </section>
+
+  <section class="card" id="historyCard">
+    <h2>Your car's history</h2>
+    <p class="muted small">Saved in this browser only, so it builds up as you scan. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
+    <table><tbody id="historyRows"></tbody></table>
+    <p class="small muted" id="historyEmpty">No documents saved yet.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn secondary" id="backupBtn" type="button">⬇ Back up</button>
+      <button class="btn secondary" id="restoreBtn" type="button">⬆ Restore</button>
+    </div>
+    <input id="restoreFile" type="file" accept="application/json,.json">
+    <p class="muted small">A backup is one file with your history and kept documents (personal details already blacked out). Use it to move to a new phone or into the Home Screen app.</p>
+    <div class="status" id="historyStatus" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="card" id="sellCard">
+    <h2>4. Selling mode</h2>
+    <p class="muted small">Turn your saved history into a sale-ready summary for buyers: the service record, recent work, selling points and an honest list of known issues.</p>
+    <label class="check"><input type="checkbox" id="sellReg" checked> Show registration (buyers use it for history checks)</label>
+    <label class="check"><input type="checkbox" id="sellVin"> Show VIN</label>
+    <label class="check"><input type="checkbox" id="sellCosts"> Show what you paid</label>
+    <label class="check"><input type="checkbox" id="sellDocs" checked> Attach the redacted documents you kept</label>
+    <div class="row" style="margin-top:12px"><button class="btn" id="sellBtn" type="button" disabled>Create sale summary</button></div>
+    <p class="muted small" id="sellHint"></p>
+    <div class="status" id="sellStatus" role="status" aria-live="polite"></div>
+    <div id="saleOut" hidden>
+      <div class="sale" id="saleSheet"></div>
+      <p class="small note" id="saleCostNote" hidden>Costs changed since the summary was written; create it again so the selling points match.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn secondary" id="printBtn" type="button">⬇ Save as PDF</button>
+        <button class="btn secondary" id="copyBtn" type="button">Copy as text</button>
+      </div>
+      <p class="muted small">A shareable link for buyers needs the real app's server. For now, save the PDF and send that.</p>
+    </div>
+  </section>
 </main>
 
 <script>
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": ["integer", "null"]}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "enum": ["engine_oil", "oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs", "brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid", "coolant", "timing_belt", "aux_belt", "tyre", "battery", "bulb", "wipers", "clutch", "exhaust", "suspension", "screenwash", "mot_test", "labour", "diagnostics", "other"]}, "quantity": {"type": ["number", "null"]}, "unit_price": {"type": ["number", "null"]}, "line_total": {"type": ["number", "null"]}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": ["number", "null"]}, "osf": {"type": ["number", "null"]}, "nsr": {"type": ["number", "null"]}, "osr": {"type": ["number", "null"]}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": ["number", "null"]}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": ["number", "null"], "description": "Grand total as PRINTED on the document (incl. VAT). Null if not printed or illegible - never compute it from line items."}, "amount_paid": {"type": ["number", "null"], "description": "Amount charged, e.g. on a card receipt"}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes"], "additionalProperties": false};
-const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
+const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
 const MAX_EDGE = 1568;
 const PRICES = { "claude-opus-5-5": [4, 20], "claude-haiku-5-5": [0.10, 0.50] };
@@ -158,12 +303,95 @@ $("forget").addEventListener("click", e => { e.preventDefault(); store.del("port
 let pages = [];   // { full: HTMLCanvasElement, small: HTMLCanvasElement }
 let result = null;
 
-function setStatus(msg, kind = "") {
-  $("status").className = "status " + kind;
-  $("status").replaceChildren();
-  if (kind === "busy") { const s = document.createElement("span"); s.className = "spinner"; $("status").append(s); }
-  $("status").append(document.createTextNode(msg));
+function setStatus(msg, kind = "", el = $("status")) {
+  el.className = "status " + kind;
+  el.replaceChildren();
+  if (kind === "busy") { const s = document.createElement("span"); s.className = "spinner"; el.append(s); }
+  el.append(document.createTextNode(msg));
 }
+
+function el(tag, props = {}, ...kids) {
+  const e = Object.assign(document.createElement(tag), props);
+  e.append(...kids);
+  return e;
+}
+
+// Beta testers connect with an invite code through the Porter beta server
+// (porter repo, worker/), which holds the API key and caps spend. Set this to
+// the deployed Worker's URL; while it's empty, the page asks for an API key.
+const BETA_SERVER = "";
+let mode = BETA_SERVER && store.get("porter.mode") !== "key" ? "invite" : "key";
+const params = new URLSearchParams(location.search);
+if (params.has("invite")) {
+  // Invite links: ?invite=<code> fills in the code, then drops it from the address bar.
+  store.set("porter.invite", params.get("invite").trim());
+  store.set("porter.mode", "invite");
+  if (BETA_SERVER) mode = "invite";
+  history.replaceState(null, "", location.pathname + location.hash);
+}
+$("invite").value = store.get("porter.invite") || "";
+
+function showMode() {
+  $("inviteBox").hidden = mode !== "invite";
+  $("keyBox").hidden = mode !== "key";
+  $("useInviteWrap").hidden = !BETA_SERVER;
+  $("motNeedsServer").hidden = mode === "invite";
+  $("motBtn").disabled = mode !== "invite";
+}
+const setMode = m => e => { e.preventDefault(); mode = m; store.set("porter.mode", m); showMode(); if (m === "invite") checkInvite(); };
+$("useKey").onclick = setMode("key");
+$("useInvite").onclick = setMode("invite");
+$("invite").addEventListener("change", e => { store.set("porter.invite", e.target.value.trim()); checkInvite(); });
+
+const inviteHeaders = code => ({ "x-porter-invite": code });
+async function checkInvite() {
+  const code = $("invite").value.trim();
+  const out = $("inviteStatus");
+  out.className = "small"; out.textContent = "";
+  if (!code || !BETA_SERVER) return;
+  try {
+    const resp = await fetch(BETA_SERVER + "/v1/check", { headers: inviteHeaders(code) });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
+    out.textContent = `Welcome, ${d.name}. $${d.remaining_usd.toFixed(2)} of today's allowance left.`;
+  } catch (err) {
+    out.className = "small status error"; out.textContent = err.message;
+  }
+}
+
+function credentials(statusEl) {
+  if (mode === "invite") {
+    const invite = $("invite").value.trim();
+    if (!invite) { setStatus("Enter your invite code first.", "error", statusEl); $("invite").focus(); return null; }
+    store.set("porter.invite", invite);
+    return { invite };
+  }
+  const key = $("key").value.trim();
+  if (!key) { setStatus("Enter your API key first.", "error", statusEl); $("key").focus(); return null; }
+  store.set("porter.key", key);
+  return { key };
+}
+
+async function callClaude(cred, body) {
+  const headers = { "content-type": "application/json", "anthropic-version": API_VERSION };
+  if (cred.invite) Object.assign(headers, inviteHeaders(cred.invite));
+  else Object.assign(headers, { "x-api-key": cred.key, "anthropic-dangerous-direct-browser-access": "true" });
+  if (FALLBACK_MODELS.has(body.model)) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
+  const url = cred.invite ? BETA_SERVER + "/v1/messages" : "https://api.anthropic.com/v1/messages";
+  const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  const msg = await resp.json();
+  if (!resp.ok) throw new Error(msg?.error?.message || `HTTP ${resp.status}`);
+  if (msg.stop_reason === "refusal") throw new Error("The model declined this request.");
+  if (msg.stop_reason === "max_tokens") throw new Error("Response was cut off; try a shorter input.");
+  return msg;
+}
+
+function costUsd(msg, model) {
+  const [pin, pout] = PRICES[model];
+  return (msg.usage.input_tokens * pin + msg.usage.output_tokens * pout) / 1e6;
+}
+
+const failHint = err => /authentication|x-api-key|invalid.*key/i.test(err.message) ? " Check your API key." : "";
 
 async function toCanvas(file, maxEdge) {
   // createImageBitmap honours EXIF orientation, so phone photos come out upright.
@@ -189,6 +417,7 @@ async function addFiles(fileList) {
     } catch (err) { setStatus("Couldn't read that image: " + err.message, "error"); }
   }
   $("scanBtn").disabled = $("clearBtn").disabled = pages.length === 0;
+  $("deviceCheck").hidden = true;
   if (pages.length) setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or scan.`);
 }
 
@@ -228,20 +457,219 @@ $("camera").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("files").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("clearBtn").onclick = () => {
   closeWebcam();
-  pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true;
+  pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true; $("deviceCheck").hidden = true;
+  lastVisitId = "";
   $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
 };
 
+// Step 1, on the phone: read the text with Tesseract (OCR in the browser; the
+// page images never leave the device for this) and box the personal details.
+const TESSERACT = {
+  script: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+  integrity: "sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F",
+  workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+  corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
+  langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int",
+};
+let ocrWorker = null, ocrProgress = () => {};
+function loadScript(src, integrity) {
+  return new Promise((res, rej) => {
+    const sc = el("script", { src, crossOrigin: "anonymous", integrity });
+    sc.onload = res; sc.onerror = () => rej(new Error("couldn't load the on-phone text reader"));
+    document.head.append(sc);
+  });
+}
+async function getOcr() {
+  if (!ocrWorker) {
+    if (!window.Tesseract) await loadScript(TESSERACT.script, TESSERACT.integrity);
+    ocrWorker = await Tesseract.createWorker("eng", 1, {
+      workerPath: TESSERACT.workerPath, corePath: TESSERACT.corePath, langPath: TESSERACT.langPath,
+      logger: m => ocrProgress(m),
+    });
+  }
+  return ocrWorker;
+}
+
+const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact)\b\s*:?/i;
+const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
+const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d[d.length - 1 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
+
+// Personal-data boxes from Tesseract's lines, in the image's pixel space.
+// Over-boxing is the safe failure: the owner uncovers anything that's fine.
+function findPersonalData(data, page) {
+  const lines = [];
+  for (const b of data.blocks || []) for (const para of b.paragraphs) for (const l of para.lines) {
+    let text = "", spans = [];
+    for (const w of l.words) { text += (text ? " " : "") + w.text; spans.push({ w, start: text.length - w.text.length, end: text.length }); }
+    lines.push({ text, spans, bbox: l.bbox });
+  }
+  // Geometry, not Tesseract's paragraphs (which split address blocks apart):
+  // the lines stacked directly above, and the line directly below.
+  const lh = l => l.bbox.y1 - l.bbox.y0;
+  const above = l => lines.filter(o => o !== l && o.bbox.y1 <= l.bbox.y0 + 0.3 * lh(l) && l.bbox.y0 - o.bbox.y1 < 1.2 * lh(l)
+    && Math.abs(o.bbox.x0 - l.bbox.x0) < 2 * lh(l)).sort((a, b) => b.bbox.y1 - a.bbox.y1)[0];
+  const below = l => lines.filter(o => o !== l && o.bbox.y0 >= l.bbox.y1 - 0.3 * lh(l) && o.bbox.y0 - l.bbox.y1 < 1.5 * lh(l)
+    && o.bbox.x0 < l.bbox.x1 && o.bbox.x1 > l.bbox.x0).sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
+  const boxes = [];
+  const add = (bbox, category, text) => boxes.push({ page, category, text, x0: bbox.x0, y0: bbox.y0, x1: bbox.x1, y1: bbox.y1, source: "device", on: true });
+  const union = ws => ({ x0: Math.min(...ws.map(w => w.bbox.x0)), y0: Math.min(...ws.map(w => w.bbox.y0)), x1: Math.max(...ws.map(w => w.bbox.x1)), y1: Math.max(...ws.map(w => w.bbox.y1)) });
+  const boxMatch = (line, re, category, ok = () => true) => {
+    for (const m of line.text.matchAll(re)) {
+      if (!ok(m[0], line)) continue;
+      const ws = line.spans.filter(s => s.end > m.index && s.start < m.index + m[0].length).map(s => s.w);
+      if (ws.length) add(union(ws), category, m[0]);
+    }
+  };
+  const digitsOf = t => t.replace(/\D/g, "");
+  for (const line of lines) {
+    const t = line.text;
+    boxMatch(line, /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "email");
+    boxMatch(line, /(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; });
+    boxMatch(line, /\b(?:\d[ -]?){13,19}\b/g, "account_or_card_number", m => luhn(digitsOf(m)));
+    boxMatch(line, /(?:\*{2,}|[xX]{3,})[\s-]?\d{4}\b/g, "account_or_card_number");
+    if (/sort|account|acct|a\/c/i.test(t)) boxMatch(line, /\b\d{2}-\d{2}-\d{2}\b|\b\d{8}\b/g, "account_or_card_number");
+    boxMatch(line, /\b\d{4}\s?\d{3}\s?\d{4}\b|\b\d{11}\b/g, "v5c_document_reference", m => !/^0/.test(m));
+    boxMatch(line, /\b(?:Mr|Mrs|Ms|Miss|Mx|Dr)\.?\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3}/g, "person_name");
+    // A postcode: box its line and the address lines stacked above it.
+    if (/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i.test(t)) {
+      add(line.bbox, "address", t);
+      for (let up = above(line), n = 0; up && n < 3 && !NOT_ADDRESS.test(up.text); up = above(up), n++) add(up.bbox, "address", up.text);
+    }
+    // "Customer: Jane Smith": box what follows the label, or the line below if nothing does.
+    const isSignature = /\b(signature|signed|sign here)\b/i.test(t);
+    const lab = !isSignature && t.match(LABEL_NAME);
+    if (lab) {
+      const after = line.spans.filter(s => s.start >= lab.index + lab[0].length).map(s => s.w);
+      const stop = after.findIndex(w => /:$/.test(w.text));
+      const ws = (stop >= 0 ? after.slice(0, stop) : after).slice(0, 5);
+      const next = !after.length && below(line);
+      if (ws.length) add(union(ws), "person_name", ws.map(w => w.text).join(" "));
+      else if (next) add(next.bbox, "person_name", next.text);
+    }
+    // Signatures can't be read; cover the label's line and the space beside and below it.
+    if (isSignature) {
+      const h = line.bbox.y1 - line.bbox.y0;
+      add({ x0: line.bbox.x0, y0: line.bbox.y0, x1: line.bbox.x1 + 6 * h, y1: line.bbox.y1 + 3 * h }, "signature", t);
+    }
+  }
+  const seen = new Set();
+  return boxes.filter(b => { const k = [b.x0, b.y0, b.x1, b.y1].join(); return !seen.has(k) && seen.add(k); });
+}
+
 $("scanBtn").onclick = async () => {
-  const key = $("key").value.trim();
-  if (!key) { setStatus("Enter your API key first.", "error"); $("key").focus(); return; }
-  store.set("porter.key", key);
+  if (!credentials($("status"))) return;
+  $("scanBtn").disabled = true;
+  $("results").hidden = true;
+  let ocrFailed = null;
+  try {
+    setStatus("Loading the on-phone text reader (about 7 MB, first time only)…", "busy");
+    const worker = await getOcr();
+    for (const [i, p] of pages.entries()) {
+      ocrProgress = m => { if (m.status === "recognizing text") setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy"); };
+      const { data } = await worker.recognize(p.small, {}, { blocks: true });
+      p.local = findPersonalData(data, i + 1);
+    }
+  } catch (err) {
+    ocrFailed = err;
+    pages.forEach(p => { p.local = p.local || []; });
+  } finally {
+    ocrProgress = () => {};
+    $("scanBtn").disabled = pages.length === 0;
+  }
+  setStatus("");
+  showDeviceCheck();
+  if (ocrFailed) {
+    setDrawing(true);
+    setStatus(`Your phone couldn't look for personal details (${ocrFailed.message}). Cover them yourself: drag across each one before sending.`, "error", $("checkStatus"));
+  }
+  $("deviceCheck").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+// Step 2: the owner checks the boxes. Tap toggles a box; in draw mode, drag adds one.
+let drawing = false;
+function setDrawing(on) {
+  drawing = on;
+  $("drawBtn").setAttribute("aria-pressed", on);
+  $("drawBtn").textContent = on ? "✓ Done drawing" : "✏️ Draw a box";
+  $("checkCanvases").classList.toggle("drawing", on);
+}
+$("drawBtn").onclick = () => setDrawing(!drawing);
+$("backBtn").onclick = () => { $("deviceCheck").hidden = true; setDrawing(false); };
+
+function paintCheck(c, p, draft) {
+  const ctx = c.getContext("2d");
+  ctx.drawImage(p.small, 0, 0);
+  const lw = Math.max(2, c.width / 400);
+  for (const b of p.local) {
+    if (b.on) { ctx.fillStyle = "rgba(0,0,0,.62)"; ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0); ctx.setLineDash([]); ctx.strokeStyle = "#dc0000"; }
+    else { ctx.setLineDash([6, 4]); ctx.strokeStyle = "#7a786f"; }
+    ctx.lineWidth = lw; ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  }
+  if (draft) { ctx.setLineDash([]); ctx.strokeStyle = "#1f6feb"; ctx.lineWidth = lw; ctx.strokeRect(draft.x0, draft.y0, draft.x1 - draft.x0, draft.y1 - draft.y0); }
+  ctx.setLineDash([]);
+}
+
+function checkSummary() {
+  const all = pages.flatMap(p => p.local);
+  const on = all.filter(b => b.on).length;
+  $("checkSummary").textContent = `${on} area${on === 1 ? "" : "s"} will be blacked out` +
+    (all.length > on ? `, ${all.length - on} uncovered by you` : "") + ". Faint boxes turn solid black when sent.";
+}
+
+function showDeviceCheck() {
+  $("checkCanvases").replaceChildren(...pages.map((p, i) => {
+    const c = el("canvas", { width: p.small.width, height: p.small.height, ariaLabel: `Page ${i + 1}` });
+    paintCheck(c, p);
+    const at = e => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; };
+    let start = null;
+    c.onpointerdown = e => { start = at(e); if (drawing) c.setPointerCapture(e.pointerId); };
+    c.onpointermove = e => {
+      if (!drawing || !start) return;
+      const q = at(e);
+      paintCheck(c, p, { x0: Math.min(start.x, q.x), y0: Math.min(start.y, q.y), x1: Math.max(start.x, q.x), y1: Math.max(start.y, q.y) });
+    };
+    c.onpointerup = e => {
+      if (!start) return;
+      const q = at(e), moved = Math.hypot(q.x - start.x, q.y - start.y);
+      if (drawing && moved > 8) {
+        p.local.push({ page: i + 1, category: "other_personal", text: "", source: "user", on: true,
+          x0: Math.min(start.x, q.x), y0: Math.min(start.y, q.y), x1: Math.max(start.x, q.x), y1: Math.max(start.y, q.y) });
+      } else if (moved <= 8) {
+        const hit = [...p.local].reverse().find(b => q.x >= b.x0 && q.x <= b.x1 && q.y >= b.y0 && q.y <= b.y1);
+        if (hit) hit.on = !hit.on;
+      }
+      start = null;
+      paintCheck(c, p); checkSummary();
+    };
+    return c;
+  }));
+  checkSummary();
+  setStatus("", "", $("checkStatus"));
+  $("deviceCheck").hidden = false;
+}
+
+// Step 3: only the blacked-out pages leave the phone.
+function blackedOut(p) {
+  const c = el("canvas", { width: p.small.width, height: p.small.height });
+  const ctx = c.getContext("2d");
+  ctx.drawImage(p.small, 0, 0);
+  ctx.fillStyle = "#000";
+  const pad = 2;
+  for (const b of p.local.filter(b => b.on)) ctx.fillRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad);
+  return c;
+}
+
+$("sendBtn").onclick = async () => {
+  const status = $("checkStatus");
+  const cred = credentials(status);
+  if (!cred) return;
+  setDrawing(false);
   const model = $("model").value;
   const content = [];
   pages.forEach((p, i) => {
     content.push({ type: "text", text: `Page ${i + 1} (${p.small.width}x${p.small.height} pixels):` });
     content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg",
-      data: p.small.toDataURL("image/jpeg", 0.9).split(",")[1] } });
+      data: blackedOut(p).toDataURL("image/jpeg", 0.9).split(",")[1] } });
   });
   content.push({ type: "text", text: "Extract the fields and personal-data boxes." });
   const body = {
@@ -249,34 +677,31 @@ $("scanBtn").onclick = async () => {
     output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
     messages: [{ role: "user", content }],
   };
-  const headers = {
-    "content-type": "application/json", "x-api-key": key, "anthropic-version": API_VERSION,
-    "anthropic-dangerous-direct-browser-access": "true",
-  };
-  if (FALLBACK_MODELS.has(model)) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
 
-  $("scanBtn").disabled = true;
-  setStatus("Reading the document… (10-60 seconds)", "busy");
+  $("sendBtn").disabled = true;
+  setStatus("Reading the blacked-out pages… (10-60 seconds)", "busy", status);
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
-    const msg = await resp.json();
-    if (!resp.ok) throw new Error(msg?.error?.message || `HTTP ${resp.status}`);
-    if (msg.stop_reason === "refusal") throw new Error("The model declined this document.");
-    if (msg.stop_reason === "max_tokens") throw new Error("Response was cut off; try fewer pages.");
+    const msg = await callClaude(cred, body);
     const text = msg.content.find(b => b.type === "text")?.text;
     result = JSON.parse(text);
+    const aiFound = result.pii.length;
+    result.pii.forEach(p => { p.source = "ai"; });
+    result.pii.unshift(...pages.flatMap(p => p.local.filter(b => b.on).map(({ on, ...b }) => b)));
     const added = crossCheck(result);
-    const [pin, pout] = PRICES[model];
-    const usd = (msg.usage.input_tokens * pin + msg.usage.output_tokens * pout) / 1e6;
+    const usd = costUsd(msg, model);
     $("usage").textContent = `${msg.model} · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
+    $("deviceCheck").hidden = true;
     render();
-    setStatus(`Done: ${result.pii.length} personal-data box${result.pii.length === 1 ? "" : "es"}` +
-      (added ? ` (${added} from the cross-check)` : "") + `, ~$${usd.toFixed(3)}.`);
+    saveVisit(result);
+    setStatus(aiFound
+      ? `Done, but AI spotted ${aiFound} personal detail${aiFound === 1 ? "" : "s"} your phone missed (purple boxes). They were in what was sent; they're covered now for sharing. ~$${usd.toFixed(3)}.`
+      : `Done: your phone covered everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. ~$${usd.toFixed(3)}. Saved to your history.`,
+      aiFound ? "error" : "");
+    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
-    const hint = /authentication|x-api-key|invalid.*key/i.test(err.message) ? " Check your API key." : "";
-    setStatus("Failed: " + err.message + hint, "error");
+    setStatus("Failed: " + err.message + failHint(err), "error", status);
   } finally {
-    $("scanBtn").disabled = pages.length === 0;
+    $("sendBtn").disabled = false;
   }
 };
 
@@ -320,7 +745,7 @@ function drawPage(i, view) {
   ctx.drawImage(page.full, 0, 0);
   for (const b of boxesFor(i, page)) {
     if (view === "redacted") { ctx.fillStyle = "#000"; ctx.fillRect(b.x, b.y, b.w, b.h); }
-    else { ctx.strokeStyle = b.source === "cross_check" ? "#ff8c00" : "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
+    else { ctx.strokeStyle = { cross_check: "#ff8c00", ai: "#a020f0" }[b.source] || "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
   }
   return c;
 }
@@ -356,11 +781,15 @@ function addField(dl, label, value) {
 function render() {
   const r = result;
   $("results").hidden = false;
+  $("fbMore").hidden = $("fbThanks").hidden = true;
+  $("fbYes").disabled = $("fbNo").disabled = false;
+  $("fbComment").value = "";
   renderCanvases();
   $("piiList").replaceChildren(...r.pii.map(p => {
     const li = document.createElement("li");
-    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")}` + (p.source === "cross_check" ? " (cross-check)" : "");
-    if (p.source === "cross_check") li.className = "flagged";
+    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")} · ` +
+      ({ cross_check: "cross-check", ai: "spotted by AI after sending", user: "you drew it" }[p.source] || "covered on your phone");
+    if (p.source === "cross_check" || p.source === "ai") li.className = "flagged";
     return li;
   }));
 
@@ -416,6 +845,562 @@ function render() {
   $("notes").textContent = r.notes;
   $("raw").textContent = JSON.stringify(r, null, 2);
 }
+
+// Saved history: scanned visits and advice notes, kept in this browser
+// (localStorage) so they build up over time. Personal-data text and boxes are
+// never saved; only the vehicle and service fields.
+const HISTORY_KEY = "porter.history";
+const VISIT_FIELDS = ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "mileage", "mileage_unit",
+  "garage_name", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "next_due"];
+function loadHistory() {
+  try {
+    const h = JSON.parse(store.get(HISTORY_KEY));
+    if (Array.isArray(h?.visits) && Array.isArray(h?.notes)) return { feedback: [], ...h };
+  } catch {}
+  return { visits: [], notes: [], feedback: [] };
+}
+const saved = loadHistory();
+let persistAsked = false;
+function saveHistory() {
+  store.set(HISTORY_KEY, JSON.stringify(saved));
+  // Ask the browser not to evict our storage under pressure (Chrome grants it
+  // quietly for sites in use; Safari decides for itself).
+  if (!persistAsked) { persistAsked = true; navigator.storage?.persist?.().catch(() => {}); }
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+let lastVisitId = "";
+const KEEP_HINT = $("keepNote").textContent;   // the visit scanned in this tab, offered first for advice
+
+function saveVisit(doc) {
+  const v = { id: newId(), savedAt: todayIso() };
+  for (const k of VISIT_FIELDS) v[k] = doc[k];
+  saved.visits.push(v);
+  saveHistory();
+  lastVisitId = v.id;
+  $("keepNote").textContent = KEEP_HINT;
+  renderHistory();
+}
+
+const byDateDesc = (a, b) => (b.date || "").localeCompare(a.date || "");
+const visitTitle = v => v.source === "dvsa" ? "MOT test (DVSA)" : v.garage_name || v.doc_type.replaceAll("_", " ");
+const visitLabel = v => [v.date || "undated", visitTitle(v)].join(" · ");
+const workSummary = v => (v.work_items.length ? v.work_items : v.line_items.filter(l => l.category !== "labour").map(l => l.description)).join(", ")
+  || v.doc_type.replaceAll("_", " ");
+
+function renderHistory() {
+  const visits = [...saved.visits].sort(byDateDesc);
+  $("historyRows").replaceChildren(...visits.map(v => {
+    const del = el("button", { className: "linkbtn", type: "button", ariaLabel: "Delete visit" }, "✕");
+    del.onclick = () => {
+      saved.visits = saved.visits.filter(x => x.id !== v.id);
+      if (lastVisitId === v.id) lastVisitId = "";
+      pageStore.del(v.id);
+      saveHistory(); renderHistory();
+    };
+    return el("tr", {},
+      el("td", {}, el("div", { style: "font-weight:600" }, visitLabel(v)), el("div", { className: "muted small" },
+        workSummary(v) + (v.keptPages ? ` · 📎 ${v.keptPages} redacted page${v.keptPages === 1 ? "" : "s"} kept` : ""))),
+      el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() + " mi" : ""),
+      el("td", { className: "num" }, del));
+  }));
+  $("historyEmpty").hidden = visits.length > 0;
+  const keep = $("adviceVisit").value || lastVisitId;
+  $("adviceVisit").replaceChildren(el("option", { value: "" }, "Not linked (dated today)"),
+    ...visits.map(v => el("option", { value: v.id }, visitLabel(v))));
+  $("adviceVisit").value = visits.some(v => v.id === keep) ? keep : "";
+  $("sellBtn").disabled = !visits.length;
+  $("keepBtn").disabled = !visits.some(v => v.id === lastVisitId && !v.keptPages);
+  $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Scan a document or import your MOT history first.";
+  renderNotes();
+}
+$("clearHistory").onclick = e => {
+  e.preventDefault();
+  if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
+  saved.visits = []; saved.notes = []; saved.feedback = []; delete saved.vehicle; lastVisitId = ""; saveHistory(); renderHistory(); renderDueDates();
+  pageStore.clear();
+  $("saleOut").hidden = true;
+};
+
+// Verbal advice: what the mechanic said but didn't write down. Claude turns
+// the owner's words into actions with dates, which become calendar reminders.
+const ADVICE_SCHEMA = {"type": "object", "properties": {"tags": {"type": "array", "items": {"type": "string", "enum": ["service", "repair", "advice", "purchase", "general"]}}, "summary": {"type": "string", "description": "One line, plain words"}, "actions": {"type": "array", "items": {"type": "object", "properties": {"action": {"type": "string", "description": "What to do, e.g. Replace front tyres"}, "quote": {"type": "string", "description": "The owner's words this action comes from"}, "due_date": {"type": "string", "description": "YYYY-MM-DD, or empty if no date was given"}, "approximate": {"type": "boolean"}, "due_mileage": {"type": ["integer", "null"], "description": "Odometer reading it is due at, if a mileage was given"}}, "required": ["action", "quote", "due_date", "approximate", "due_mileage"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Anything unclear"}}, "required": ["tags", "summary", "actions", "notes"], "additionalProperties": false};
+const ADVICE_SYSTEM = "You turn what a mechanic told a car owner out loud into a note for the car's\nservice history. The owner types or dictates it in their own words after the\nvisit, so expect speech-recognition slips (\"tires\", \"break pads\").\n\nTag the note with every type that fits: service, repair, advice (a\nrecommendation or warning), purchase, general. Write a one-line summary.\n\nList each thing the owner should do or keep an eye on as an action, with the\nwords it came from. Only include what the mechanic actually said; never add\nadvice of your own.\n\nDates: resolve against the reference date given (the visit date), picking the\nnext occurrence on or after it. Exact dates are not approximate. Fuzzy ones are:\n\"early <month>\" = the 5th, \"mid-<month>\" = the 15th, \"end of <month>\" = the last\nday, \"in a couple of weeks\" = +14 days, \"in a few months\" = +3 months, \"before\nwinter\" = 1 November, \"in the spring\" = 1 March. For a mileage (\"in another 2,000\nmiles\") give the odometer reading in due_mileage if the current mileage is known;\notherwise leave it null and say so in notes. No date given: empty due_date.";
+
+const todayIso = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const currentVisit = () => saved.visits.find(v => v.id === $("adviceVisit").value) || null;
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (!SR) {
+  $("dictateBtn").hidden = true;
+  $("dictateNote").textContent = "Tip: use your phone keyboard's mic key to dictate.";
+}
+$("dictateBtn").onclick = () => {
+  if (rec) { rec.stop(); return; }
+  rec = new SR();
+  rec.lang = "en-GB"; rec.continuous = true; rec.interimResults = true;
+  const base = $("adviceText").value.trim();
+  rec.onresult = e => {
+    const heard = Array.from(e.results, r => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+    $("adviceText").value = (base ? base + " " : "") + heard;
+    $("adviceBtn").disabled = false;
+  };
+  rec.onerror = e => setStatus("Dictation stopped: " + e.error, "error", $("adviceStatus"));
+  rec.onend = () => {
+    rec = null; $("dictateBtn").textContent = "🎙 Dictate";
+    if ($("adviceStatus").textContent.startsWith("Listening")) setStatus("", "", $("adviceStatus"));
+  };
+  rec.start();
+  $("dictateBtn").textContent = "⏹ Stop";
+  setStatus("Listening… say what the mechanic told you.", "", $("adviceStatus"));
+};
+$("adviceText").oninput = () => { $("adviceBtn").disabled = !$("adviceText").value.trim(); };
+
+$("adviceBtn").onclick = async () => {
+  rec?.stop();
+  const status = $("adviceStatus");
+  const cred = credentials(status);
+  const text = $("adviceText").value.trim();
+  if (!cred || !text) return;
+  const model = $("model").value;
+  const visit = currentVisit();
+  const ref = visit?.date || todayIso();
+  const context = [
+    `Reference date: ${ref}`,
+    visit ? `Visit: ${visit.garage_name || "unknown garage"}, mileage ${visit.mileage ?? "unknown"}` : "Not linked to a visit; current mileage unknown.",
+    visit?.advisories.length ? "Advisories printed on the document: " + visit.advisories.join("; ") : "",
+    `What the mechanic said, in the owner's words:\n"""${text}"""`,
+  ].filter(Boolean).join("\n");
+  const body = {
+    model, max_tokens: 4000, system: ADVICE_SYSTEM,
+    output_config: { effort: "low", format: { type: "json_schema", schema: ADVICE_SCHEMA } },
+    messages: [{ role: "user", content: context }],
+  };
+  $("adviceBtn").disabled = true;
+  setStatus("Reading the advice…", "busy", status);
+  try {
+    const msg = await callClaude(cred, body);
+    const parsed = JSON.parse(msg.content.find(b => b.type === "text")?.text);
+    parsed.actions.forEach(a => { a.include = !!a.due_date; });
+    saved.notes.push({ id: newId(), visitId: visit?.id || "", garage: visit?.garage_name || "", ref, text, parsed });
+    saveHistory(); renderHistory();
+    $("adviceText").value = "";
+    const dated = parsed.actions.filter(a => a.due_date).length;
+    setStatus(`Saved: ${parsed.actions.length} action${parsed.actions.length === 1 ? "" : "s"}, ${dated} with a date. ~$${costUsd(msg, model).toFixed(4)}.`, "", status);
+  } catch (err) {
+    setStatus("Failed: " + err.message + failHint(err), "error", status);
+    $("adviceBtn").disabled = false;
+  }
+};
+
+function renderNotes() {
+  $("adviceList").replaceChildren(...[...saved.notes].reverse().map(noteBlock));
+}
+
+function noteBlock(n) {
+  const p = n.parsed;
+  const where = n.visitId ? `${n.garage || "Scanned visit"} · ${n.ref}` : `Not linked to a visit · ${n.ref}`;
+  const rows = p.actions.map(a => {
+    const tick = el("input", { type: "checkbox", checked: !!a.include, ariaLabel: "Add to calendar" });
+    const what = el("input", { type: "text", value: a.action, ariaLabel: "Reminder" });
+    const date = el("input", { type: "date", value: a.due_date, ariaLabel: "Due date" });
+    const meta = el("div", { className: "small muted" });
+    const showMeta = () => meta.textContent = [
+      a.approximate && a.due_date ? "≈ approximate date" : "",
+      a.due_mileage != null ? `or at ${a.due_mileage.toLocaleString()} miles` : "",
+      a.quote ? `“${a.quote}”` : "",
+    ].filter(Boolean).join(" · ");
+    showMeta();
+    tick.onchange = () => { a.include = tick.checked; saveHistory(); };
+    what.onchange = () => { a.action = what.value.trim() || a.action; saveHistory(); };
+    date.onchange = () => {
+      a.due_date = date.value; a.approximate = false;
+      if (date.value) a.include = tick.checked = true;
+      showMeta(); saveHistory();
+    };
+    return { tick, date, a, row: el("div", { className: "reminder" }, tick, el("div", {}, what, date, meta)) };
+  });
+  const del = el("button", { className: "linkbtn small", type: "button" }, "Delete note");
+  del.onclick = () => { saved.notes = saved.notes.filter(x => x.id !== n.id); saveHistory(); renderHistory(); };
+  const block = el("div", { className: "advice" },
+    el("div", { className: "small muted", style: "display:flex;justify-content:space-between;gap:8px" }, el("span", {}, where), del),
+    el("div", {}, ...p.tags.map(t => el("span", { className: "chip" }, t))),
+    el("p", { style: "font-weight:600;margin:6px 0" }, p.summary),
+    el("p", { className: "small muted", style: "margin:0 0 6px" }, `You said: “${n.text}”`),
+    ...(rows.length ? rows.map(r => r.row) : [el("p", { className: "small" }, "No actions or dates found.")]),
+    ...(p.notes ? [el("p", { className: "small note" }, p.notes)] : []));
+  if (rows.length) {
+    const btn = el("button", { className: "btn secondary", type: "button", style: "margin-top:10px;width:100%" }, "📅 Add ticked to calendar (.ics)");
+    btn.onclick = () => {
+      const events = rows.filter(r => r.tick.checked && r.date.value).map(r => ({
+        date: r.date.value,
+        title: r.a.action,
+        approximate: r.a.approximate,
+        desc: `${n.garage ? "Advice from " + n.garage + " on " + n.ref : "Mechanic's advice, noted " + n.ref}: “${r.a.quote || n.text}”`,
+      }));
+      if (!events.length) { setStatus("Tick a reminder that has a date first.", "error", $("adviceStatus")); return; }
+      downloadIcs(events);
+    };
+    block.append(btn);
+  }
+  return block;
+}
+
+// All-day events with an alert a week ahead (two weeks if the date is approximate).
+function downloadIcs(events) {
+  const esc = s => s.replace(/[\;,]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
+  const fold = line => line.match(/.{1,73}/gu).join("\r\n ");
+  const ymd = d => d.replaceAll("-", "");
+  const nextDay = d => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Porter demo//EN", "CALSCALE:GREGORIAN"];
+  for (const e of events) {
+    const title = e.title + (e.approximate ? " (approx. date)" : "");
+    lines.push("BEGIN:VEVENT", `UID:${newId()}@porter-demo`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${ymd(e.date)}`, `DTEND;VALUE=DATE:${ymd(nextDay(e.date))}`,
+      `SUMMARY:${esc(title)}`, `DESCRIPTION:${esc(e.desc)}`,
+      "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(title)}`, `TRIGGER:-P${e.approximate ? 14 : 7}D`, "END:VALARM",
+      "END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  const url = URL.createObjectURL(new Blob([lines.map(fold).join("\r\n") + "\r\n"], { type: "text/calendar" }));
+  el("a", { href: url, download: "porter-reminders.ics" }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Selling mode: a sale-ready summary for buyers. The vehicle facts and the
+// service table come straight from the saved records; Claude only writes the
+// headline, selling points and known issues, from those same records.
+const SALE_SCHEMA = {"type": "object", "properties": {"headline": {"type": "string"}, "value_points": {"type": "array", "items": {"type": "string"}}, "known_issues": {"type": "array", "items": {"type": "string"}}}, "required": ["headline", "value_points", "known_issues"], "additionalProperties": false};
+const SALE_SYSTEM = "You write the summary a private seller gives buyers of their used car, from the\ncar's service records and the owner's notes of what mechanics told them. Use only\nfacts in the records; never invent work, parts, condition or history.\n\nheadline: one line with the year, make and model, mileage and the strongest true\nclaim about its history, e.g. \"2018 Ford Focus 1.0 EcoBoost, 48,210 miles, serviced\nevery year since 2019\". Only say \"full service history\" if the records show a\nservice at least every 15 months with no gaps.\n\nvalue_points: 3 to 6 concrete selling points, each with its month and year, e.g.\n\"Four new tyres, Oct 2026\", \"Cambelt and water pump replaced at 60,000 miles\".\nPrefer recent and expensive work, MOT passes without advisories, and regular\nservicing. Mention money only if costs are included in the records.\n\nknown_issues: an honest list of advisories and mechanic's advice that a later\nrecord does not show as fixed, with when it was raised and anything due soon\n(e.g. \"MOT due March 2027\"). Plain, factual wording; disclosure builds a buyer's\ntrust. Empty if there are none.\n\nBritish English, no exclamation marks, no sales clichés.";
+
+let sale = null;   // last Claude output, re-rendered when the options change
+
+function saleRecords() {
+  const costs = $("sellCosts").checked;
+  return {
+    today: todayIso(),
+    costs_included: costs,
+    documents: [...saved.visits].sort(byDateDesc).map(v => ({
+      date: v.date, type: v.doc_type, source: v.source === "dvsa" ? "DVSA MOT record" : "scanned document",
+      garage: v.garage_name, mileage: v.mileage, work: v.work_items,
+      parts: v.line_items.filter(l => l.category !== "labour").map(l => costs ? `${l.description} (£${l.line_total ?? "?"})` : l.description),
+      tyre_depths_mm: v.tyre_depths_mm, brake_wear: v.brake_wear, advisories: v.advisories, next_due: v.next_due,
+      ...(costs ? { total_cost: v.total_cost } : {}),
+    })),
+    mechanic_advice: saved.notes.map(n => ({ date: n.ref, garage: n.garage, said: n.text, actions: n.parsed.actions.map(a => a.action + (a.due_date ? ` (due ${a.due_date})` : "")) })),
+  };
+}
+
+$("sellBtn").onclick = async () => {
+  const status = $("sellStatus");
+  const cred = credentials(status);
+  if (!cred) return;
+  const model = $("model").value;
+  const body = {
+    model, max_tokens: 4000, system: SALE_SYSTEM,
+    output_config: { effort: "medium", format: { type: "json_schema", schema: SALE_SCHEMA } },
+    messages: [{ role: "user", content: "Service records and notes:\n" + JSON.stringify(saleRecords(), null, 1) }],
+  };
+  $("sellBtn").disabled = true;
+  setStatus("Writing the sale summary…", "busy", status);
+  try {
+    const msg = await callClaude(cred, body);
+    sale = { ...JSON.parse(msg.content.find(b => b.type === "text")?.text), costs: $("sellCosts").checked };
+    renderSale();
+    setStatus(`Done, ~$${costUsd(msg, model).toFixed(4)}. Check every line before you share it.`, "", status);
+  } catch (err) {
+    setStatus("Failed: " + err.message + failHint(err), "error", status);
+  } finally {
+    $("sellBtn").disabled = !saved.visits.length;
+  }
+};
+
+function vehicleFacts() {
+  const visits = [...saved.visits].sort(byDateDesc);
+  const first = k => visits.find(v => v[k])?.[k] || "";
+  const withMiles = visits.filter(v => v.mileage != null).sort((a, b) => b.mileage - a.mileage)[0];
+  return { make_model: first("make_model"), registration: first("registration"), vin: first("vin"),
+    first_registered: first("date_first_registered"), mileage: withMiles, visits };
+}
+
+function renderSale() {
+  if (!sale) return;
+  const f = vehicleFacts();
+  const showCosts = $("sellCosts").checked;
+  const dl = el("dl");
+  addField(dl, "Vehicle", f.make_model);
+  if ($("sellReg").checked && f.registration) addField(dl, "Registration", el("span", { className: "plate" }, f.registration));
+  if ($("sellVin").checked) addField(dl, "VIN", f.vin);
+  addField(dl, "First registered", f.first_registered);
+  if (f.mileage) addField(dl, "Mileage", `${f.mileage.mileage.toLocaleString()} miles${f.mileage.date ? " (" + f.mileage.date + ")" : ""}`);
+  const list = items => el("ul", {}, ...items.map(t => el("li", {}, t)));
+  const rows = f.visits.map(v => el("tr", {},
+    el("td", { style: "white-space:nowrap;padding-right:10px" }, v.date || "undated"),
+    el("td", {}, el("div", { style: "font-weight:600" }, visitTitle(v)), el("div", { className: "muted small" }, workSummary(v))),
+    el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() : ""),
+    ...(showCosts ? [el("td", { className: "num" }, money(v.total_cost) || "")] : [])));
+  $("saleSheet").replaceChildren(
+    el("h3", { style: "margin:0 0 10px" }, sale.headline),
+    dl,
+    ...(sale.value_points.length ? [el("h4", {}, "Why it's a good one"), list(sale.value_points)] : []),
+    el("h4", {}, "Service history"),
+    el("table", {}, el("tbody", {}, el("tr", { className: "muted small" }, el("td", {}, "Date"), el("td", {}, "Garage and work"), el("td", { className: "num" }, "Miles"),
+      ...(showCosts ? [el("td", { className: "num" }, "Cost")] : [])), ...rows)),
+    el("h4", {}, "Known issues"),
+    sale.known_issues.length ? list(sale.known_issues) : el("p", { className: "small" }, "None recorded."),
+    el("p", { className: "muted small", style: "margin-top:14px" }, `From ${f.visits.length} service record${f.visits.length === 1 ? "" : "s"} in Porter, ${todayIso()}. Owner's personal details are not included.`));
+  $("saleOut").hidden = false;
+  renderSaleDocs(f.visits);
+  $("saleCostNote").hidden = showCosts === sale.costs;
+}
+["sellReg", "sellVin", "sellCosts", "sellDocs"].forEach(id => $(id).onchange = renderSale);
+
+$("printBtn").onclick = () => window.print();
+$("copyBtn").onclick = async () => {
+  const docs = $("saleSheet").querySelector(".docs-section");
+  if (docs) docs.hidden = true;
+  const text = $("saleSheet").innerText.replace(/\n{3,}/g, "\n\n");
+  if (docs) docs.hidden = false;
+  try { await navigator.clipboard.writeText(text); setStatus("Copied. Paste it into your listing.", "", $("sellStatus")); }
+  catch { setStatus("Couldn't copy; select the text and copy it yourself.", "error", $("sellStatus")); }
+};
+
+// Redacted copies of the original documents, kept only when the owner asks
+// (after checking the boxes). Only the owner's personal data is blacked out:
+// buyers usually get the paper originals anyway, so the registration, VIN and
+// prices stay visible whatever the summary shows. IndexedDB, since images
+// outgrow localStorage; memory only if it's unavailable.
+const STORED_EDGE = 1600;
+const memPages = new Map();
+const pageStore = (() => {
+  let dbp = null;
+  const open = () => dbp ??= new Promise((res, rej) => {
+    const r = indexedDB.open("porter", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("pages");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const run = async (mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction("pages", mode), req = fn(tx.objectStore("pages"));
+      tx.oncomplete = () => res(req.result); tx.onerror = () => rej(tx.error);
+    });
+  };
+  return {
+    async get(k) { try { return await run("readonly", s => s.get(k)) ?? memPages.get(k); } catch { return memPages.get(k); } },
+    async set(k, v) { try { await run("readwrite", s => s.put(v, k)); return true; } catch { memPages.set(k, v); return false; } },
+    async del(k) { memPages.delete(k); try { await run("readwrite", s => s.delete(k)); } catch {} },
+    async clear() { memPages.clear(); try { await run("readwrite", s => s.clear()); } catch {} },
+  };
+})();
+
+$("keepBtn").onclick = async () => {
+  const v = saved.visits.find(x => x.id === lastVisitId);
+  if (!v || !result) return;
+  $("keepBtn").disabled = true;
+  const kept = await Promise.all(pages.map(async (page, i) => {
+    const red = drawPage(i, "redacted");
+    const scale = Math.min(1, STORED_EDGE / Math.max(red.width, red.height));
+    const c = el("canvas", { width: Math.round(red.width * scale), height: Math.round(red.height * scale) });
+    c.getContext("2d").drawImage(red, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    return { blob };
+  }));
+  const durable = await pageStore.set(v.id, kept);
+  v.keptPages = kept.length;
+  saveHistory(); renderHistory();
+  $("keepNote").textContent = durable
+    ? `Kept ${kept.length} redacted page${kept.length === 1 ? "" : "s"} with this visit. Selling mode can attach ${kept.length === 1 ? "it" : "them"}.`
+    : "Kept for this tab only: this browser won't store images, so they'll be gone on reload.";
+};
+
+let docsRender = 0;
+async function renderSaleDocs(visits) {
+  const token = ++docsRender;
+  const withDocs = visits.filter(v => v.keptPages);
+  $("sellDocs").disabled = !withDocs.length;
+  if (!$("sellDocs").checked || !withDocs.length) return;
+  const figures = [];
+  for (const v of withDocs) {
+    const kept = await pageStore.get(v.id);
+    if (!kept) continue;
+    for (const [i, p] of kept.entries()) {
+      const bmp = await createImageBitmap(p.blob);
+      const c = el("canvas", { width: bmp.width, height: bmp.height });
+      c.getContext("2d").drawImage(bmp, 0, 0);
+      figures.push(el("figure", {}, c, el("figcaption", {}, `${visitLabel(v)}${kept.length > 1 ? `, page ${i + 1} of ${kept.length}` : ""}`)));
+    }
+  }
+  if (token !== docsRender || !figures.length) return;
+  $("saleSheet").append(el("div", { className: "docs-section" },
+    el("h4", {}, "Original documents"),
+    el("p", { className: "muted small" }, "As issued, with the owner's personal details blacked out."),
+    el("div", { className: "docs" }, ...figures)));
+}
+
+// Redaction feedback: the beta's most important question. Kept with the
+// history; sendFeedback() also reports it when a beta server is set up.
+function recordFeedback(covered, comment = "") {
+  const entry = { at: new Date().toISOString(), model: $("model").value, doc_type: result?.doc_type || "",
+    pages: pages.length, pii_boxes: result?.pii.length ?? 0, covered, comment: comment.slice(0, 1000) };
+  saved.feedback.push(entry);
+  saveHistory();
+  sendFeedback(entry);
+  $("fbYes").disabled = $("fbNo").disabled = true;
+  $("fbMore").hidden = true;
+  $("fbThanks").hidden = false;
+  $("fbThanks").textContent = covered ? "Thanks. Still glance over every page before sharing." : "Thanks, noted. Don't share this one until you've covered what was missed.";
+}
+async function sendFeedback(entry) {
+  const invite = $("invite").value.trim();
+  if (mode !== "invite" || !BETA_SERVER || !invite) return;
+  fetch(BETA_SERVER + "/feedback", { method: "POST", headers: { "content-type": "application/json", ...inviteHeaders(invite) },
+    body: JSON.stringify(entry) }).catch(() => {});
+}
+$("fbYes").onclick = () => recordFeedback(true);
+$("fbNo").onclick = () => { $("fbMore").hidden = false; $("fbComment").focus(); };
+$("fbSend").onclick = () => recordFeedback(false, $("fbComment").value.trim());
+
+// Backup and restore: one JSON file with the history and kept pages.
+const blobToDataUrl = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+$("backupBtn").onclick = async () => {
+  const pagesOut = {};
+  for (const v of saved.visits.filter(v => v.keptPages)) {
+    const kept = await pageStore.get(v.id);
+    if (kept) pagesOut[v.id] = await Promise.all(kept.map(async p => ({ data: await blobToDataUrl(p.blob) })));
+  }
+  const backup = { app: "porter-demo", version: 1, exportedAt: new Date().toISOString(), history: saved, pages: pagesOut };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: "application/json" }));
+  el("a", { href: url, download: `porter-backup-${todayIso()}.json` }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus(`Backed up ${saved.visits.length} document${saved.visits.length === 1 ? "" : "s"} and ${saved.notes.length} note${saved.notes.length === 1 ? "" : "s"}.`, "", $("historyStatus"));
+};
+$("restoreBtn").onclick = () => $("restoreFile").click();
+$("restoreFile").onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const status = $("historyStatus");
+  try {
+    const b = JSON.parse(await file.text());
+    if (b?.app !== "porter-demo" || !Array.isArray(b.history?.visits)) throw new Error("that isn't a Porter backup file");
+    const have = new Set([...saved.visits, ...saved.notes].map(x => x.id));
+    const visits = b.history.visits.filter(v => !have.has(v.id));
+    const notes = (b.history.notes || []).filter(n => !have.has(n.id));
+    for (const v of visits) {
+      const kept = b.pages?.[v.id];
+      if (kept?.length) {
+        await pageStore.set(v.id, await Promise.all(kept.map(async p => ({ blob: await (await fetch(p.data)).blob() }))));
+      } else delete v.keptPages;
+    }
+    const seen = new Set(saved.feedback.map(f => f.at));
+    saved.visits.push(...visits);
+    saved.notes.push(...notes);
+    if (!saved.vehicle && b.history.vehicle) saved.vehicle = b.history.vehicle;
+    saved.feedback.push(...(b.history.feedback || []).filter(f => !seen.has(f.at)));
+    saveHistory(); renderHistory(); renderDueDates();
+    setStatus(`Restored ${visits.length} document${visits.length === 1 ? "" : "s"} and ${notes.length} note${notes.length === 1 ? "" : "s"}` +
+      (visits.length + notes.length ? "." : " (everything in the backup was already here)."), "", status);
+  } catch (err) {
+    setStatus("Couldn't restore: " + err.message, "error", status);
+  }
+};
+
+// MOT history (DVSA) and tax/MOT status (DVLA), looked up by registration
+// through the beta server, which holds those API keys. Each MOT test becomes a
+// visit in the history; DVLA's due dates become calendar reminders.
+const DEFECT_LABELS = { ADVISORY: "Advisory", MINOR: "Minor", MAJOR: "Major", DANGEROUS: "Dangerous", FAIL: "Failure", PRS: "Fixed at test", "USER ENTERED": "Note" };
+
+function importMot(vehicle) {
+  const have = new Set(saved.visits.map(v => v.mot_test_number).filter(Boolean));
+  let added = 0;
+  for (const t of vehicle?.motTests || []) {
+    if (t.motTestNumber && have.has(t.motTestNumber)) continue;
+    const miles = parseInt(t.odometerValue, 10);
+    saved.visits.push({
+      id: newId(), savedAt: todayIso(), source: "dvsa", mot_test_number: t.motTestNumber || "",
+      doc_type: "mot_certificate", registration: vehicle.registration || "", vin: "",
+      make_model: [vehicle.make, vehicle.model].filter(Boolean).join(" "),
+      date_first_registered: (vehicle.firstUsedDate || vehicle.registrationDate || "").slice(0, 10),
+      date: (t.completedDate || "").slice(0, 10),
+      mileage: Number.isFinite(miles) ? miles : null, mileage_unit: (t.odometerUnit || "").toUpperCase() === "KM" ? "km" : "miles",
+      garage_name: "", garage_postcode: "", service_mode: "unknown",
+      work_items: [t.testResult === "PASSED" ? "MOT passed" : "MOT failed"], line_items: [],
+      tyre_depths_mm: { nsf: null, osf: null, nsr: null, osr: null }, brake_wear: [],
+      advisories: (t.defects || []).map(d => `${DEFECT_LABELS[d.type] || d.type}${d.dangerous ? " (dangerous)" : ""}: ${d.text}`),
+      total_cost: null, next_due: t.expiryDate || "",
+    });
+    added++;
+  }
+  return added;
+}
+
+$("motBtn").onclick = async () => {
+  const status = $("motStatus");
+  const cred = credentials(status);
+  const reg = $("motReg").value.toUpperCase().replace(/\s+/g, "");
+  if (!cred?.invite) return;
+  if (!reg) { setStatus("Enter your registration first.", "error", status); $("motReg").focus(); return; }
+  $("motBtn").disabled = true;
+  setStatus("Looking up your car…", "busy", status);
+  try {
+    const resp = await fetch(`${BETA_SERVER}/vehicle?registration=${encodeURIComponent(reg)}`, { headers: inviteHeaders(cred.invite) });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
+    const mot = d.mot?.vehicle, dvla = d.dvla?.vehicle;
+    const added = importMot(mot);
+    if (dvla || mot) {
+      saved.vehicle = { registration: d.registration, checkedAt: todayIso(),
+        make: dvla?.make || mot?.make || "", colour: dvla?.colour || mot?.primaryColour || "",
+        taxStatus: dvla?.taxStatus || "", taxDueDate: dvla?.taxDueDate || "",
+        motStatus: dvla?.motStatus || "", motExpiryDate: dvla?.motExpiryDate || "", motTestDueDate: mot?.motTestDueDate || "" };
+    }
+    saveHistory(); renderHistory(); renderDueDates();
+    const tests = mot?.motTests?.length || 0;
+    const parts = [mot ? `Found ${tests} MOT test${tests === 1 ? "" : "s"}, ${added} new added to your history.` : d.mot?.error,
+      dvla ? "" : d.dvla?.error].filter(Boolean);
+    setStatus(parts.join(" "), mot || dvla ? "" : "error", status);
+  } catch (err) {
+    setStatus("Failed: " + err.message, "error", status);
+  } finally {
+    $("motBtn").disabled = mode !== "invite";
+  }
+};
+
+function renderDueDates() {
+  const v = saved.vehicle;
+  if (!v) { $("dueDates").replaceChildren(); return; }
+  const item = (label, text, date, title) => {
+    const row = el("div", { className: "reminder", style: "grid-template-columns:1fr auto;align-items:center" },
+      el("div", {}, el("div", { style: "font-weight:600" }, label), el("div", { className: "small muted" }, text)));
+    if (date) {
+      const btn = el("button", { className: "btn secondary", type: "button", style: "min-height:40px;flex:none" }, "📅 Remind me");
+      btn.onclick = () => downloadIcs([{ date, title: `${title} (${v.registration})`, approximate: false, desc: `From DVLA, checked ${v.checkedAt}.` }]);
+      row.append(btn);
+    } else row.append(el("span"));
+    return row;
+  };
+  const rows = [];
+  if (v.taxStatus || v.taxDueDate) rows.push(item("Road tax", [v.taxStatus, v.taxDueDate && "due " + v.taxDueDate].filter(Boolean).join(", "), v.taxDueDate, "Road tax due"));
+  if (v.motExpiryDate || v.motStatus) rows.push(item("MOT", [v.motStatus, v.motExpiryDate && "expires " + v.motExpiryDate].filter(Boolean).join(", "), v.motExpiryDate, "MOT due"));
+  else if (v.motTestDueDate) rows.push(item("First MOT", "due " + v.motTestDueDate, v.motTestDueDate, "First MOT due"));
+  $("dueDates").replaceChildren(
+    el("p", { className: "small", style: "margin:12px 0 0" }, el("span", { className: "plate" }, v.registration), ` ${[v.colour, v.make].filter(Boolean).join(" ").toLowerCase()}`),
+    ...rows,
+    el("p", { className: "muted small" }, `Checked ${v.checkedAt}. Import again to refresh.`));
+}
+
+// iPhone Safari outside a Home Screen app: suggest installing, once.
+const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+$("installTip").hidden = !ios || standalone || store.get("porter.installTipDone") === "1";
+$("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $("installTip").hidden = true; };
+
+showMode();
+checkInvite();
+renderHistory();
+renderDueDates();
 </script>
 </body>
 </html>
