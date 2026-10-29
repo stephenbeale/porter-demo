@@ -41,7 +41,10 @@ input[type=password], input[type=text], input[type=date], select, textarea { wid
 .btn:disabled { opacity: .5; cursor: default; }
 input[type=file] { display: none; }
 .thumbs { display: flex; gap: 8px; overflow-x: auto; margin-top: 12px; }
-.thumbs img { height: 84px; border-radius: 8px; border: 1px solid var(--rule); }
+.thumbs img { height: 84px; border-radius: 8px; border: 1px solid var(--rule); display: block; }
+.thumb { position: relative; flex: none; }
+.thumb button { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.65); color: #fff; font-size: 14px; line-height: 28px; padding: 0; cursor: pointer; }
 .status { margin-top: 12px; min-height: 1.4em; }
 .status.error { color: var(--bad); }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--rule); border-top-color: var(--accent);
@@ -147,8 +150,8 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     </div>
     <div class="thumbs" id="thumbs"></div>
     <div class="row" style="margin-top:12px">
-      <button class="btn" id="scanBtn" type="button" disabled>Scan document</button>
-      <button class="btn secondary" id="clearBtn" type="button" disabled>Clear</button>
+      <button class="btn" id="scanBtn" type="button" hidden>Process</button>
+      <button class="btn secondary" id="clearBtn" type="button" hidden>Remove</button>
     </div>
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
@@ -442,6 +445,26 @@ async function toCanvas(file, maxEdge) {
   return c;
 }
 
+// Thumbnails, each with its own remove button; Process/Remove only show once
+// there's a page to act on.
+function renderPages() {
+  $("thumbs").replaceChildren(...pages.map((p, i) => {
+    const x = el("button", { type: "button", ariaLabel: `Remove page ${i + 1}` }, "✕");
+    x.onclick = () => removePage(i);
+    return el("div", { className: "thumb" }, el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` }), x);
+  }));
+  $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
+  $("clearBtn").textContent = pages.length > 1 ? "Remove all" : "Remove";
+}
+function removePage(i) {
+  pages.splice(i, 1);
+  pages.forEach((p, n) => (p.local || []).forEach(b => { b.page = n + 1; }));
+  if (!pages.length) { $("clearBtn").click(); return; }
+  renderPages();
+  if (!$("deviceCheck").hidden) afterChecks();
+  else setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.`);
+}
+
 async function addFiles(fileList) {
   const files = [...fileList].filter(f => f.type.startsWith("image/"));
   if (!files.length) return;
@@ -452,14 +475,13 @@ async function addFiles(fileList) {
       const full = await toCanvas(f, 3000);   // cap memory on phones
       const small = await toCanvas(f, MAX_EDGE);
       pages.push({ full, small });
-      const img = document.createElement("img");
-      img.src = small.toDataURL("image/jpeg", 0.6); img.alt = `Page ${pages.length}`;
-      $("thumbs").append(img);
+      renderPages();
+      $("scanBtn").disabled = $("clearBtn").disabled = true;
     } catch (err) { setStatus("Couldn't read that image: " + err.message, "error"); }
   }
   $("scanBtn").disabled = $("clearBtn").disabled = pages.length === 0;
   $("deviceCheck").hidden = true;
-  if (pages.length) setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or scan.`);
+  if (pages.length) setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.`);
 }
 
 // capture="environment" only opens the camera on phones; desktop browsers
@@ -498,9 +520,9 @@ $("camera").onchange = e => { addFiles([...e.target.files]); e.target.value = ""
 $("files").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
 $("clearBtn").onclick = () => {
   closeWebcam();
-  pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true; $("deviceCheck").hidden = true;
+  pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true;
   lastVisitId = "";
-  $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
+  renderPages(); setStatus("");
 };
 
 // Step 1, on the phone: read the text with Tesseract (OCR in the browser; the
@@ -533,7 +555,7 @@ async function getOcr() {
 
 // Photos are often sideways. If the first read looks like gibberish, try the
 // page turned each way and keep the reading with the most confident words;
-// boxes are then mapped back onto the page as photographed.
+// the page itself is then turned upright, for the preview and for sending.
 const goodWords = data => (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words)))
   .filter(w => w.confidence > 70 && /[A-Za-z]{3,}/.test(w.text)).length;
 function rotated(src, rot) {
@@ -554,15 +576,6 @@ async function recognizeUpright(worker, src) {
   }
   return best;
 }
-// A box found on the page turned clockwise by rot degrees, back on the original W x H page.
-function unrotate(b, rot, W, H) {
-  const { x0, y0, x1, y1 } = b;
-  const xy = rot === 90 ? { x0: y0, x1: y1, y0: H - x1, y1: H - x0 }
-    : rot === 270 ? { x0: W - y1, x1: W - y0, y0: x0, y1: x1 }
-    : rot === 180 ? { x0: W - x1, x1: W - x0, y0: H - y1, y1: H - y0 } : { x0, y0, x1, y1 };
-  return { ...b, ...xy };
-}
-
 const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact|operator|tester|inspector|technician)\b\s*:?/i;
 const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
 const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d[d.length - 1 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
@@ -596,7 +609,7 @@ function findPersonalData(data, page) {
   const digitsOf = t => t.replace(/\D/g, "");
   for (const line of lines) {
     const t = line.text;
-    boxMatch(line, /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "email");
+    boxMatch(line, /[\w.+-]+@[\w-]+(?:\s?\.\s?[\w-]+)+/g, "email");   // OCR often adds a space after a dot
     boxMatch(line, /(?<![\d+])(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d(?!\d)/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; });
     boxMatch(line, /\b(?:\d[ -]?){13,19}\b/g, "account_or_card_number", m => luhn(digitsOf(m)));
     boxMatch(line, /(?:\*{2,}|[xX]{3,})[\s-]?\d{4}\b/g, "account_or_card_number");
@@ -665,7 +678,7 @@ $("scanBtn").onclick = async () => {
   if (!credentials($("status"))) return;
   $("scanBtn").disabled = true;
   $("results").hidden = true;
-  let ocrFailed = null, peopleFailed = null;
+  let ocrFailed = null, peopleFailed = null, turned = false;
   setStatus("Loading the on-phone checks (about 14 MB, first time only)…", "busy");
   const detector = getPeopleDetector().catch(err => { peopleFailed = err; return null; });
   try {
@@ -673,7 +686,8 @@ $("scanBtn").onclick = async () => {
     for (const [i, p] of pages.entries()) {
       ocrProgress = m => { if (m.status === "recognizing text") setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy"); };
       const { data, rot } = await recognizeUpright(worker, p.small);
-      p.local = findPersonalData(data, i + 1).map(b => unrotate(b, rot, p.small.width, p.small.height));
+      if (rot) { p.small = rotated(p.small, rot); p.full = rotated(p.full, rot); turned = true; }
+      p.local = findPersonalData(data, i + 1);
       p.ocrText = data.text || "";
     }
   } catch (err) {
@@ -682,6 +696,7 @@ $("scanBtn").onclick = async () => {
   } finally {
     ocrProgress = () => {};
   }
+  if (turned) renderPages();
   const h = await detector;
   if (h) {
     for (const [i, p] of pages.entries()) {
@@ -730,7 +745,7 @@ function removePages(drop) {
   if (!keep.length) { $("clearBtn").click(); setStatus("Removed. Nothing was sent."); return; }
   pages = keep;
   pages.forEach((p, i) => p.local.forEach(b => { b.page = i + 1; }));
-  $("thumbs").replaceChildren(...pages.map((p, i) => el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` })));
+  renderPages();
   afterChecks();
 }
 $("removeBlocked").onclick = () => {
@@ -1111,7 +1126,7 @@ function renderHistory() {
   $("adviceVisit").value = visits.some(v => v.id === keep) ? keep : "";
   $("sellBtn").disabled = !visits.length;
   $("keepBtn").disabled = !visits.some(v => v.id === lastVisitId && !v.keptPages);
-  $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Scan a document or import your MOT history first.";
+  $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Add a document or import your MOT history first.";
   renderNotes();
 }
 $("clearHistory").onclick = e => {
