@@ -105,15 +105,23 @@ label.check input { width: 20px; height: 20px; margin: 0; }
   </section>
 
   <section class="card" id="settings">
-    <h2>1. Your Anthropic API key</h2>
-    <label for="key">API key</label>
-    <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+    <h2>1. Connect</h2>
+    <div id="inviteBox" hidden>
+      <label for="invite">Invite code</label>
+      <input id="invite" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. alice-7f3k">
+      <p class="small" id="inviteStatus"></p>
+      <p class="muted small">Your photos and notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
+    </div>
+    <div id="keyBox">
+      <label for="key">Anthropic API key</label>
+      <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Your photos go straight from this phone to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
+    </div>
     <label for="model">Model</label>
     <select id="model">
       <option value="claude-opus-5-5">Opus 5.5: most accurate, ~4-7¢ per document</option>
       <option value="claude-haiku-5-5">Haiku 5.5: cheapest, ~0.1¢ per page</option>
     </select>
-    <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Your photos go straight from this phone to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a></p>
   </section>
 
   <section class="card">
@@ -187,6 +195,17 @@ label.check input { width: 20px; height: 20px; margin: 0; }
         <pre id="raw" class="small" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
       </details>
     </section>
+  </section>
+
+  <section class="card" id="motCard">
+    <h2>Or import your MOT history</h2>
+    <p class="muted small">Every MOT test on record for your car, with mileage, advisories and failures, from DVSA. Plus road tax and MOT due dates from DVLA.</p>
+    <label for="motReg">Registration</label>
+    <input id="motReg" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AB12 CDE">
+    <div class="row" style="margin-top:10px"><button class="btn" id="motBtn" type="button">Import</button></div>
+    <p class="muted small" id="motNeedsServer" hidden>Needs an invite code: MOT lookups go through Porter's beta server.</p>
+    <div class="status" id="motStatus" role="status" aria-live="polite"></div>
+    <div id="dueDates"></div>
   </section>
 
   <section class="card" id="adviceCard">
@@ -278,20 +297,69 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 
-function apiKey(statusEl) {
+// Beta testers connect with an invite code through the Porter beta server
+// (porter repo, worker/), which holds the API key and caps spend. Set this to
+// the deployed Worker's URL; while it's empty, the page asks for an API key.
+const BETA_SERVER = "";
+let mode = BETA_SERVER && store.get("porter.mode") !== "key" ? "invite" : "key";
+const params = new URLSearchParams(location.search);
+if (params.has("invite")) {
+  // Invite links: ?invite=<code> fills in the code, then drops it from the address bar.
+  store.set("porter.invite", params.get("invite").trim());
+  store.set("porter.mode", "invite");
+  if (BETA_SERVER) mode = "invite";
+  history.replaceState(null, "", location.pathname + location.hash);
+}
+$("invite").value = store.get("porter.invite") || "";
+
+function showMode() {
+  $("inviteBox").hidden = mode !== "invite";
+  $("keyBox").hidden = mode !== "key";
+  $("useInviteWrap").hidden = !BETA_SERVER;
+  $("motNeedsServer").hidden = mode === "invite";
+  $("motBtn").disabled = mode !== "invite";
+}
+const setMode = m => e => { e.preventDefault(); mode = m; store.set("porter.mode", m); showMode(); if (m === "invite") checkInvite(); };
+$("useKey").onclick = setMode("key");
+$("useInvite").onclick = setMode("invite");
+$("invite").addEventListener("change", e => { store.set("porter.invite", e.target.value.trim()); checkInvite(); });
+
+const inviteHeaders = code => ({ "x-porter-invite": code });
+async function checkInvite() {
+  const code = $("invite").value.trim();
+  const out = $("inviteStatus");
+  out.className = "small"; out.textContent = "";
+  if (!code || !BETA_SERVER) return;
+  try {
+    const resp = await fetch(BETA_SERVER + "/v1/check", { headers: inviteHeaders(code) });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
+    out.textContent = `Welcome, ${d.name}. $${d.remaining_usd.toFixed(2)} of today's allowance left.`;
+  } catch (err) {
+    out.className = "small status error"; out.textContent = err.message;
+  }
+}
+
+function credentials(statusEl) {
+  if (mode === "invite") {
+    const invite = $("invite").value.trim();
+    if (!invite) { setStatus("Enter your invite code first.", "error", statusEl); $("invite").focus(); return null; }
+    store.set("porter.invite", invite);
+    return { invite };
+  }
   const key = $("key").value.trim();
   if (!key) { setStatus("Enter your API key first.", "error", statusEl); $("key").focus(); return null; }
   store.set("porter.key", key);
-  return key;
+  return { key };
 }
 
-async function callClaude(key, body) {
-  const headers = {
-    "content-type": "application/json", "x-api-key": key, "anthropic-version": API_VERSION,
-    "anthropic-dangerous-direct-browser-access": "true",
-  };
+async function callClaude(cred, body) {
+  const headers = { "content-type": "application/json", "anthropic-version": API_VERSION };
+  if (cred.invite) Object.assign(headers, inviteHeaders(cred.invite));
+  else Object.assign(headers, { "x-api-key": cred.key, "anthropic-dangerous-direct-browser-access": "true" });
   if (FALLBACK_MODELS.has(body.model)) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
-  const resp = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
+  const url = cred.invite ? BETA_SERVER + "/v1/messages" : "https://api.anthropic.com/v1/messages";
+  const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   const msg = await resp.json();
   if (!resp.ok) throw new Error(msg?.error?.message || `HTTP ${resp.status}`);
   if (msg.stop_reason === "refusal") throw new Error("The model declined this request.");
@@ -375,8 +443,8 @@ $("clearBtn").onclick = () => {
 };
 
 $("scanBtn").onclick = async () => {
-  const key = apiKey($("status"));
-  if (!key) return;
+  const cred = credentials($("status"));
+  if (!cred) return;
   const model = $("model").value;
   const content = [];
   pages.forEach((p, i) => {
@@ -394,7 +462,7 @@ $("scanBtn").onclick = async () => {
   $("scanBtn").disabled = true;
   setStatus("Reading the document… (10-60 seconds)", "busy");
   try {
-    const msg = await callClaude(key, body);
+    const msg = await callClaude(cred, body);
     const text = msg.content.find(b => b.type === "text")?.text;
     result = JSON.parse(text);
     const added = crossCheck(result);
@@ -587,7 +655,8 @@ function saveVisit(doc) {
 }
 
 const byDateDesc = (a, b) => (b.date || "").localeCompare(a.date || "");
-const visitLabel = v => [v.date || "undated", v.garage_name || v.doc_type.replaceAll("_", " ")].join(" · ");
+const visitTitle = v => v.source === "dvsa" ? "MOT test (DVSA)" : v.garage_name || v.doc_type.replaceAll("_", " ");
+const visitLabel = v => [v.date || "undated", visitTitle(v)].join(" · ");
 const workSummary = v => (v.work_items.length ? v.work_items : v.line_items.filter(l => l.category !== "labour").map(l => l.description)).join(", ")
   || v.doc_type.replaceAll("_", " ");
 
@@ -614,13 +683,13 @@ function renderHistory() {
   $("adviceVisit").value = visits.some(v => v.id === keep) ? keep : "";
   $("sellBtn").disabled = !visits.length;
   $("keepBtn").disabled = !visits.some(v => v.id === lastVisitId && !v.keptPages);
-  $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Scan at least one document first.";
+  $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Scan a document or import your MOT history first.";
   renderNotes();
 }
 $("clearHistory").onclick = e => {
   e.preventDefault();
   if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
-  saved.visits = []; saved.notes = []; saved.feedback = []; lastVisitId = ""; saveHistory(); renderHistory();
+  saved.visits = []; saved.notes = []; saved.feedback = []; delete saved.vehicle; lastVisitId = ""; saveHistory(); renderHistory(); renderDueDates();
   pageStore.clear();
   $("saleOut").hidden = true;
 };
@@ -663,9 +732,9 @@ $("adviceText").oninput = () => { $("adviceBtn").disabled = !$("adviceText").val
 $("adviceBtn").onclick = async () => {
   rec?.stop();
   const status = $("adviceStatus");
-  const key = apiKey(status);
+  const cred = credentials(status);
   const text = $("adviceText").value.trim();
-  if (!key || !text) return;
+  if (!cred || !text) return;
   const model = $("model").value;
   const visit = currentVisit();
   const ref = visit?.date || todayIso();
@@ -683,7 +752,7 @@ $("adviceBtn").onclick = async () => {
   $("adviceBtn").disabled = true;
   setStatus("Reading the advice…", "busy", status);
   try {
-    const msg = await callClaude(key, body);
+    const msg = await callClaude(cred, body);
     const parsed = JSON.parse(msg.content.find(b => b.type === "text")?.text);
     parsed.actions.forEach(a => { a.include = !!a.due_date; });
     saved.notes.push({ id: newId(), visitId: visit?.id || "", garage: visit?.garage_name || "", ref, text, parsed });
@@ -786,7 +855,8 @@ function saleRecords() {
     today: todayIso(),
     costs_included: costs,
     documents: [...saved.visits].sort(byDateDesc).map(v => ({
-      date: v.date, type: v.doc_type, garage: v.garage_name, mileage: v.mileage, work: v.work_items,
+      date: v.date, type: v.doc_type, source: v.source === "dvsa" ? "DVSA MOT record" : "scanned document",
+      garage: v.garage_name, mileage: v.mileage, work: v.work_items,
       parts: v.line_items.filter(l => l.category !== "labour").map(l => costs ? `${l.description} (£${l.line_total ?? "?"})` : l.description),
       tyre_depths_mm: v.tyre_depths_mm, brake_wear: v.brake_wear, advisories: v.advisories, next_due: v.next_due,
       ...(costs ? { total_cost: v.total_cost } : {}),
@@ -797,8 +867,8 @@ function saleRecords() {
 
 $("sellBtn").onclick = async () => {
   const status = $("sellStatus");
-  const key = apiKey(status);
-  if (!key) return;
+  const cred = credentials(status);
+  if (!cred) return;
   const model = $("model").value;
   const body = {
     model, max_tokens: 4000, system: SALE_SYSTEM,
@@ -808,7 +878,7 @@ $("sellBtn").onclick = async () => {
   $("sellBtn").disabled = true;
   setStatus("Writing the sale summary…", "busy", status);
   try {
-    const msg = await callClaude(key, body);
+    const msg = await callClaude(cred, body);
     sale = { ...JSON.parse(msg.content.find(b => b.type === "text")?.text), costs: $("sellCosts").checked };
     renderSale();
     setStatus(`Done, ~$${costUsd(msg, model).toFixed(4)}. Check every line before you share it.`, "", status);
@@ -840,7 +910,7 @@ function renderSale() {
   const list = items => el("ul", {}, ...items.map(t => el("li", {}, t)));
   const rows = f.visits.map(v => el("tr", {},
     el("td", { style: "white-space:nowrap;padding-right:10px" }, v.date || "undated"),
-    el("td", {}, el("div", { style: "font-weight:600" }, v.garage_name || v.doc_type.replaceAll("_", " ")), el("div", { className: "muted small" }, workSummary(v))),
+    el("td", {}, el("div", { style: "font-weight:600" }, visitTitle(v)), el("div", { className: "muted small" }, workSummary(v))),
     el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() : ""),
     ...(showCosts ? [el("td", { className: "num" }, money(v.total_cost) || "")] : [])));
   $("saleSheet").replaceChildren(
@@ -852,7 +922,7 @@ function renderSale() {
       ...(showCosts ? [el("td", { className: "num" }, "Cost")] : [])), ...rows)),
     el("h4", {}, "Known issues"),
     sale.known_issues.length ? list(sale.known_issues) : el("p", { className: "small" }, "None recorded."),
-    el("p", { className: "muted small", style: "margin-top:14px" }, `From ${f.visits.length} service document${f.visits.length === 1 ? "" : "s"} recorded in Porter, ${todayIso()}. Owner's personal details are not included.`));
+    el("p", { className: "muted small", style: "margin-top:14px" }, `From ${f.visits.length} service record${f.visits.length === 1 ? "" : "s"} in Porter, ${todayIso()}. Owner's personal details are not included.`));
   $("saleOut").hidden = false;
   renderSaleDocs(f.visits);
   $("saleCostNote").hidden = showCosts === sale.costs;
@@ -955,7 +1025,12 @@ function recordFeedback(covered, comment = "") {
   $("fbThanks").hidden = false;
   $("fbThanks").textContent = covered ? "Thanks. Still glance over every page before sharing." : "Thanks, noted. Don't share this one until you've covered what was missed.";
 }
-async function sendFeedback(entry) {}
+async function sendFeedback(entry) {
+  const invite = $("invite").value.trim();
+  if (mode !== "invite" || !BETA_SERVER || !invite) return;
+  fetch(BETA_SERVER + "/feedback", { method: "POST", headers: { "content-type": "application/json", ...inviteHeaders(invite) },
+    body: JSON.stringify(entry) }).catch(() => {});
+}
 $("fbYes").onclick = () => recordFeedback(true);
 $("fbNo").onclick = () => { $("fbMore").hidden = false; $("fbComment").focus(); };
 $("fbSend").onclick = () => recordFeedback(false, $("fbComment").value.trim());
@@ -995,8 +1070,9 @@ $("restoreFile").onchange = async e => {
     const seen = new Set(saved.feedback.map(f => f.at));
     saved.visits.push(...visits);
     saved.notes.push(...notes);
+    if (!saved.vehicle && b.history.vehicle) saved.vehicle = b.history.vehicle;
     saved.feedback.push(...(b.history.feedback || []).filter(f => !seen.has(f.at)));
-    saveHistory(); renderHistory();
+    saveHistory(); renderHistory(); renderDueDates();
     setStatus(`Restored ${visits.length} document${visits.length === 1 ? "" : "s"} and ${notes.length} note${notes.length === 1 ? "" : "s"}` +
       (visits.length + notes.length ? "." : " (everything in the backup was already here)."), "", status);
   } catch (err) {
@@ -1004,13 +1080,100 @@ $("restoreFile").onchange = async e => {
   }
 };
 
+// MOT history (DVSA) and tax/MOT status (DVLA), looked up by registration
+// through the beta server, which holds those API keys. Each MOT test becomes a
+// visit in the history; DVLA's due dates become calendar reminders.
+const DEFECT_LABELS = { ADVISORY: "Advisory", MINOR: "Minor", MAJOR: "Major", DANGEROUS: "Dangerous", FAIL: "Failure", PRS: "Fixed at test", "USER ENTERED": "Note" };
+
+function importMot(vehicle) {
+  const have = new Set(saved.visits.map(v => v.mot_test_number).filter(Boolean));
+  let added = 0;
+  for (const t of vehicle?.motTests || []) {
+    if (t.motTestNumber && have.has(t.motTestNumber)) continue;
+    const miles = parseInt(t.odometerValue, 10);
+    saved.visits.push({
+      id: newId(), savedAt: todayIso(), source: "dvsa", mot_test_number: t.motTestNumber || "",
+      doc_type: "mot_certificate", registration: vehicle.registration || "", vin: "",
+      make_model: [vehicle.make, vehicle.model].filter(Boolean).join(" "),
+      date_first_registered: (vehicle.firstUsedDate || vehicle.registrationDate || "").slice(0, 10),
+      date: (t.completedDate || "").slice(0, 10),
+      mileage: Number.isFinite(miles) ? miles : null, mileage_unit: (t.odometerUnit || "").toUpperCase() === "KM" ? "km" : "miles",
+      garage_name: "", garage_postcode: "", service_mode: "unknown",
+      work_items: [t.testResult === "PASSED" ? "MOT passed" : "MOT failed"], line_items: [],
+      tyre_depths_mm: { nsf: null, osf: null, nsr: null, osr: null }, brake_wear: [],
+      advisories: (t.defects || []).map(d => `${DEFECT_LABELS[d.type] || d.type}${d.dangerous ? " (dangerous)" : ""}: ${d.text}`),
+      total_cost: null, next_due: t.expiryDate || "",
+    });
+    added++;
+  }
+  return added;
+}
+
+$("motBtn").onclick = async () => {
+  const status = $("motStatus");
+  const cred = credentials(status);
+  const reg = $("motReg").value.toUpperCase().replace(/\s+/g, "");
+  if (!cred?.invite) return;
+  if (!reg) { setStatus("Enter your registration first.", "error", status); $("motReg").focus(); return; }
+  $("motBtn").disabled = true;
+  setStatus("Looking up your car…", "busy", status);
+  try {
+    const resp = await fetch(`${BETA_SERVER}/vehicle?registration=${encodeURIComponent(reg)}`, { headers: inviteHeaders(cred.invite) });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
+    const mot = d.mot?.vehicle, dvla = d.dvla?.vehicle;
+    const added = importMot(mot);
+    if (dvla || mot) {
+      saved.vehicle = { registration: d.registration, checkedAt: todayIso(),
+        make: dvla?.make || mot?.make || "", colour: dvla?.colour || mot?.primaryColour || "",
+        taxStatus: dvla?.taxStatus || "", taxDueDate: dvla?.taxDueDate || "",
+        motStatus: dvla?.motStatus || "", motExpiryDate: dvla?.motExpiryDate || "", motTestDueDate: mot?.motTestDueDate || "" };
+    }
+    saveHistory(); renderHistory(); renderDueDates();
+    const tests = mot?.motTests?.length || 0;
+    const parts = [mot ? `Found ${tests} MOT test${tests === 1 ? "" : "s"}, ${added} new added to your history.` : d.mot?.error,
+      dvla ? "" : d.dvla?.error].filter(Boolean);
+    setStatus(parts.join(" "), mot || dvla ? "" : "error", status);
+  } catch (err) {
+    setStatus("Failed: " + err.message, "error", status);
+  } finally {
+    $("motBtn").disabled = mode !== "invite";
+  }
+};
+
+function renderDueDates() {
+  const v = saved.vehicle;
+  if (!v) { $("dueDates").replaceChildren(); return; }
+  const item = (label, text, date, title) => {
+    const row = el("div", { className: "reminder", style: "grid-template-columns:1fr auto;align-items:center" },
+      el("div", {}, el("div", { style: "font-weight:600" }, label), el("div", { className: "small muted" }, text)));
+    if (date) {
+      const btn = el("button", { className: "btn secondary", type: "button", style: "min-height:40px;flex:none" }, "📅 Remind me");
+      btn.onclick = () => downloadIcs([{ date, title: `${title} (${v.registration})`, approximate: false, desc: `From DVLA, checked ${v.checkedAt}.` }]);
+      row.append(btn);
+    } else row.append(el("span"));
+    return row;
+  };
+  const rows = [];
+  if (v.taxStatus || v.taxDueDate) rows.push(item("Road tax", [v.taxStatus, v.taxDueDate && "due " + v.taxDueDate].filter(Boolean).join(", "), v.taxDueDate, "Road tax due"));
+  if (v.motExpiryDate || v.motStatus) rows.push(item("MOT", [v.motStatus, v.motExpiryDate && "expires " + v.motExpiryDate].filter(Boolean).join(", "), v.motExpiryDate, "MOT due"));
+  else if (v.motTestDueDate) rows.push(item("First MOT", "due " + v.motTestDueDate, v.motTestDueDate, "First MOT due"));
+  $("dueDates").replaceChildren(
+    el("p", { className: "small", style: "margin:12px 0 0" }, el("span", { className: "plate" }, v.registration), ` ${[v.colour, v.make].filter(Boolean).join(" ").toLowerCase()}`),
+    ...rows,
+    el("p", { className: "muted small" }, `Checked ${v.checkedAt}. Import again to refresh.`));
+}
+
 // iPhone Safari outside a Home Screen app: suggest installing, once.
 const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 $("installTip").hidden = !ios || standalone || store.get("porter.installTipDone") === "1";
 $("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $("installTip").hidden = true; };
 
+showMode();
+checkInvite();
 renderHistory();
+renderDueDates();
 </script>
 </body>
 </html>
