@@ -64,12 +64,19 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 .linkbtn { background: none; border: 0; padding: 4px 6px; color: var(--accent); cursor: pointer; font: inherit; }
 .sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
 .sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
+.docs { display: flex; gap: 8px; flex-wrap: wrap; }
+.docs figure { margin: 0; } .docs figcaption { font-size: .75em; color: var(--muted); max-width: 120px; }
+.docs canvas { height: 150px; width: auto; margin: 0 0 2px; }
 @media print {
   body { background: #fff; }
   main { padding: 0; max-width: none; }
   main > :not(#sellCard), #sellCard > :not(#saleOut), #saleOut > :not(#saleSheet) { display: none !important; }
   #sellCard, #saleSheet { border: 0; padding: 0; margin: 0; background: #fff; }
   #saleSheet * { color: #000 !important; }
+  .docs { display: block; }
+  .docs figure { break-before: page; }
+  .docs figcaption { max-width: none; font-size: 10pt; margin-bottom: 6px; }
+  .docs canvas { width: 100%; height: auto; max-height: 25cm; object-fit: contain; border: 0; }
   .plate { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 .advice { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
@@ -129,7 +136,11 @@ label.check input { width: 20px; height: 20px; margin: 0; }
       <div id="canvases"></div>
       <p class="muted small note">Orange boxes are numbers that match personal data found on this or an earlier scan in this session (e.g. the end of a phone number peeking out from under a receipt). AI boxes are suggestions. Check every page for anything missed before sharing.</p>
       <ul class="pii small" id="piiList"></ul>
-      <div class="row"><button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button></div>
+      <div class="row">
+        <button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button>
+        <button class="btn secondary" id="keepBtn" type="button">📎 Keep for selling</button>
+      </div>
+      <p class="muted small" id="keepNote">Checked the boxes? Keep a redacted copy with this visit so Selling mode can attach it for buyers.</p>
     </section>
     <section class="card">
       <h2>Details</h2>
@@ -181,6 +192,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <label class="check"><input type="checkbox" id="sellReg" checked> Show registration (buyers use it for history checks)</label>
     <label class="check"><input type="checkbox" id="sellVin"> Show VIN</label>
     <label class="check"><input type="checkbox" id="sellCosts"> Show what you paid</label>
+    <label class="check"><input type="checkbox" id="sellDocs" checked> Attach the redacted documents you kept</label>
     <div class="row" style="margin-top:12px"><button class="btn" id="sellBtn" type="button" disabled>Create sale summary</button></div>
     <p class="muted small" id="sellHint"></p>
     <div class="status" id="sellStatus" role="status" aria-live="polite"></div>
@@ -197,8 +209,8 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 </main>
 
 <script>
-const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": ["integer", "null"]}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "enum": ["engine_oil", "oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs", "brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid", "coolant", "timing_belt", "aux_belt", "tyre", "battery", "bulb", "wipers", "clutch", "exhaust", "suspension", "screenwash", "mot_test", "labour", "diagnostics", "other"]}, "quantity": {"type": ["number", "null"]}, "unit_price": {"type": ["number", "null"]}, "line_total": {"type": ["number", "null"]}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": ["number", "null"]}, "osf": {"type": ["number", "null"]}, "nsr": {"type": ["number", "null"]}, "osr": {"type": ["number", "null"]}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": ["number", "null"]}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": ["number", "null"], "description": "Grand total as PRINTED on the document (incl. VAT). Null if not printed or illegible - never compute it from line items."}, "amount_paid": {"type": ["number", "null"], "description": "Amount charged, e.g. on a card receipt"}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes"], "additionalProperties": false};
-const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
+const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": ["integer", "null"]}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "enum": ["engine_oil", "oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs", "brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid", "coolant", "timing_belt", "aux_belt", "tyre", "battery", "bulb", "wipers", "clutch", "exhaust", "suspension", "screenwash", "mot_test", "labour", "diagnostics", "other"]}, "quantity": {"type": ["number", "null"]}, "unit_price": {"type": ["number", "null"]}, "line_total": {"type": ["number", "null"]}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": ["number", "null"]}, "osf": {"type": ["number", "null"]}, "nsr": {"type": ["number", "null"]}, "osr": {"type": ["number", "null"]}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": ["number", "null"]}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": ["number", "null"], "description": "Grand total as PRINTED on the document (incl. VAT). Null if not printed or illegible - never compute it from line items."}, "amount_paid": {"type": ["number", "null"], "description": "Amount charged, e.g. on a card receipt"}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "other_boxes": {"type": "array", "description": "Vehicle identifiers and money amounts, so a seller can choose to hide them", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "kind": {"type": "string", "enum": ["registration", "vin", "price"]}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "kind", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "other_boxes", "notes"], "additionalProperties": false};
+const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nAll pages you are given belong to ONE document. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost null and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any text field that is not on the document, and null for\nmissing numbers.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nSeparately, in other_boxes, box every appearance of the vehicle registration\nand the VIN, and every money amount (prices, line totals, VAT, the grand total),\nso the owner can choose to hide them when selling. These are not personal data.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
 const MAX_EDGE = 1568;
 const PRICES = { "claude-opus-5-5": [4, 20], "claude-haiku-5-5": [0.10, 0.50] };
@@ -325,6 +337,7 @@ $("files").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 $("clearBtn").onclick = () => {
   closeWebcam();
   pages = []; result = null; $("thumbs").replaceChildren(); $("results").hidden = true;
+  lastVisitId = "";
   $("scanBtn").disabled = $("clearBtn").disabled = true; setStatus("");
 };
 
@@ -518,7 +531,8 @@ function loadHistory() {
 const saved = loadHistory();
 const saveHistory = () => store.set(HISTORY_KEY, JSON.stringify(saved));
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-let lastVisitId = "";   // the visit scanned in this tab, offered first for advice
+let lastVisitId = "";
+const KEEP_HINT = $("keepNote").textContent;   // the visit scanned in this tab, offered first for advice
 
 function saveVisit(doc) {
   const v = { id: newId(), savedAt: todayIso() };
@@ -526,6 +540,7 @@ function saveVisit(doc) {
   saved.visits.push(v);
   saveHistory();
   lastVisitId = v.id;
+  $("keepNote").textContent = KEEP_HINT;
   renderHistory();
 }
 
@@ -542,10 +557,12 @@ function renderHistory() {
     del.onclick = () => {
       saved.visits = saved.visits.filter(x => x.id !== v.id);
       if (lastVisitId === v.id) lastVisitId = "";
+      pageStore.del(v.id);
       saveHistory(); renderHistory();
     };
     return el("tr", {},
-      el("td", {}, el("div", { style: "font-weight:600" }, visitLabel(v)), el("div", { className: "muted small" }, workSummary(v))),
+      el("td", {}, el("div", { style: "font-weight:600" }, visitLabel(v)), el("div", { className: "muted small" },
+        workSummary(v) + (v.keptPages ? ` · 📎 ${v.keptPages} redacted page${v.keptPages === 1 ? "" : "s"} kept` : ""))),
       el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() + " mi" : ""),
       el("td", { className: "num" }, del));
   }));
@@ -555,6 +572,7 @@ function renderHistory() {
     ...visits.map(v => el("option", { value: v.id }, visitLabel(v))));
   $("adviceVisit").value = visits.some(v => v.id === keep) ? keep : "";
   $("sellBtn").disabled = !visits.length;
+  $("keepBtn").disabled = !visits.some(v => v.id === lastVisitId && !v.keptPages);
   $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Scan at least one document first.";
   renderNotes();
 }
@@ -562,6 +580,7 @@ $("clearHistory").onclick = e => {
   e.preventDefault();
   if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
   saved.visits = []; saved.notes = []; lastVisitId = ""; saveHistory(); renderHistory();
+  pageStore.clear();
   $("saleOut").hidden = true;
 };
 
@@ -794,16 +813,101 @@ function renderSale() {
     sale.known_issues.length ? list(sale.known_issues) : el("p", { className: "small" }, "None recorded."),
     el("p", { className: "muted small", style: "margin-top:14px" }, `From ${f.visits.length} service document${f.visits.length === 1 ? "" : "s"} recorded in Porter, ${todayIso()}. Owner's personal details are not included.`));
   $("saleOut").hidden = false;
+  renderSaleDocs(f.visits);
   $("saleCostNote").hidden = showCosts === sale.costs;
 }
-["sellReg", "sellVin", "sellCosts"].forEach(id => $(id).onchange = renderSale);
+["sellReg", "sellVin", "sellCosts", "sellDocs"].forEach(id => $(id).onchange = renderSale);
 
 $("printBtn").onclick = () => window.print();
 $("copyBtn").onclick = async () => {
+  const docs = $("saleSheet").querySelector(".docs-section");
+  if (docs) docs.hidden = true;
   const text = $("saleSheet").innerText.replace(/\n{3,}/g, "\n\n");
+  if (docs) docs.hidden = false;
   try { await navigator.clipboard.writeText(text); setStatus("Copied. Paste it into your listing.", "", $("sellStatus")); }
   catch { setStatus("Couldn't copy; select the text and copy it yourself.", "error", $("sellStatus")); }
 };
+
+// Redacted copies of the original documents, kept only when the owner asks
+// (after checking the boxes). Personal data is burned in before saving; the
+// registration, VIN and price boxes are stored alongside so Selling mode can
+// black those out too, following its show/hide options. IndexedDB, since
+// images outgrow localStorage; memory only if it's unavailable.
+const STORED_EDGE = 1600;
+const memPages = new Map();
+const pageStore = (() => {
+  let dbp = null;
+  const open = () => dbp ??= new Promise((res, rej) => {
+    const r = indexedDB.open("porter", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("pages");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const run = async (mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction("pages", mode), req = fn(tx.objectStore("pages"));
+      tx.oncomplete = () => res(req.result); tx.onerror = () => rej(tx.error);
+    });
+  };
+  return {
+    async get(k) { try { return await run("readonly", s => s.get(k)) ?? memPages.get(k); } catch { return memPages.get(k); } },
+    async set(k, v) { try { await run("readwrite", s => s.put(v, k)); return true; } catch { memPages.set(k, v); return false; } },
+    async del(k) { memPages.delete(k); try { await run("readwrite", s => s.delete(k)); } catch {} },
+    async clear() { memPages.clear(); try { await run("readwrite", s => s.clear()); } catch {} },
+  };
+})();
+
+$("keepBtn").onclick = async () => {
+  const v = saved.visits.find(x => x.id === lastVisitId);
+  if (!v || !result) return;
+  $("keepBtn").disabled = true;
+  const kept = await Promise.all(pages.map(async (page, i) => {
+    const red = drawPage(i, "redacted");
+    const scale = Math.min(1, STORED_EDGE / Math.max(red.width, red.height));
+    const c = el("canvas", { width: Math.round(red.width * scale), height: Math.round(red.height * scale) });
+    c.getContext("2d").drawImage(red, 0, 0, c.width, c.height);
+    const f = c.width / page.small.width, pad = Math.max(3, Math.round(c.width / 200));
+    const boxes = result.other_boxes.filter(b => b.page === i + 1).map(b => ({ kind: b.kind,
+      x: b.x0 * f - pad, y: b.y0 * f - pad, w: (b.x1 - b.x0) * f + 2 * pad, h: (b.y1 - b.y0) * f + 2 * pad }));
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    return { blob, boxes };
+  }));
+  const durable = await pageStore.set(v.id, kept);
+  v.keptPages = kept.length;
+  saveHistory(); renderHistory();
+  $("keepNote").textContent = durable
+    ? `Kept ${kept.length} redacted page${kept.length === 1 ? "" : "s"} with this visit. Selling mode can attach ${kept.length === 1 ? "it" : "them"}.`
+    : "Kept for this tab only: this browser won't store images, so they'll be gone on reload.";
+};
+
+let docsRender = 0;
+async function renderSaleDocs(visits) {
+  const token = ++docsRender;
+  const withDocs = visits.filter(v => v.keptPages);
+  $("sellDocs").disabled = !withDocs.length;
+  if (!$("sellDocs").checked || !withDocs.length) return;
+  const hide = new Set([!$("sellReg").checked && "registration", !$("sellVin").checked && "vin", !$("sellCosts").checked && "price"].filter(Boolean));
+  const figures = [];
+  for (const v of withDocs) {
+    const kept = await pageStore.get(v.id);
+    if (!kept) continue;
+    for (const [i, p] of kept.entries()) {
+      const bmp = await createImageBitmap(p.blob);
+      const c = el("canvas", { width: bmp.width, height: bmp.height });
+      const ctx = c.getContext("2d");
+      ctx.drawImage(bmp, 0, 0);
+      ctx.fillStyle = "#000";
+      for (const b of p.boxes) if (hide.has(b.kind)) ctx.fillRect(b.x, b.y, b.w, b.h);
+      figures.push(el("figure", {}, c, el("figcaption", {}, `${visitLabel(v)}${kept.length > 1 ? `, page ${i + 1} of ${kept.length}` : ""}`)));
+    }
+  }
+  if (token !== docsRender || !figures.length) return;
+  const hidden = [...hide].map(k => ({ registration: "registration", vin: "VIN", price: "prices" })[k]);
+  $("saleSheet").append(el("div", { className: "docs-section" },
+    el("h4", {}, "Original documents"),
+    el("p", { className: "muted small" }, "Personal details blacked out" + (hidden.length ? `, and ${hidden.join(", ").replace(/, ([^,]*)$/, " and $1")} hidden` : "") + "."),
+    el("div", { className: "docs" }, ...figures)));
+}
 
 renderHistory();
 </script>
