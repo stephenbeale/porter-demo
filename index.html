@@ -116,8 +116,11 @@ label.check input { width: 20px; height: 20px; margin: 0; }
       <p class="muted small">Pages are blacked out on this phone first, then they and your notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
     </div>
     <div id="keyBox">
-      <label for="key">Anthropic API key</label>
-      <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+      <div id="keyEntry">
+        <label for="key">Anthropic API key</label>
+        <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+      </div>
+      <p class="small" id="keySaved" hidden>✓ API key saved (<span id="keyHint"></span>) · <a href="#" id="changeKey">Change</a></p>
       <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are blacked out on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
     </div>
     <label for="model">Model</label>
@@ -159,11 +162,11 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <div class="ask" id="notCarAsk" hidden>
       <p style="margin:0 0 10px"><b id="notCarText"></b> Are you sure you want to upload it here?</p>
       <div class="row">
-        <button class="btn secondary" id="notCarYes" type="button">Yes, it's for my car</button>
+        <button class="btn secondary" id="notCarYes" type="button">Yes, keep it</button>
         <button class="btn secondary" id="notCarNo" type="button">No, remove it</button>
       </div>
     </div>
-    <p class="small"><b>Nothing has been sent yet.</b> Your phone found these personal details and will black them out before the pages leave it.</p>
+    <p class="small"><b>Nothing has been sent yet.</b> <span id="checkLead"></span></p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px">
       <li>Tap a box to uncover it, e.g. the garage's own address, which AI needs to read.</li>
       <li>Missed something, like a signature? Tap <b>Draw a box</b>, then drag across it.</li>
@@ -315,9 +318,24 @@ const store = {
 
 $("key").value = store.get("porter.key") || "";
 $("model").value = store.get("porter.model") || "claude-opus-5-5";
-$("key").addEventListener("change", e => store.set("porter.key", e.target.value.trim()));
+let editingKey = false;
+function showKey() {
+  const k = store.get("porter.key") || "";
+  const saved = !!k && !editingKey;
+  $("keyEntry").hidden = saved;
+  $("keySaved").hidden = !saved;
+  $("keyHint").textContent = k ? `sk-ant-…${k.slice(-4)}` : "";
+}
+// Saved as soon as it's typed, but only collapsed on its next use or the next
+// visit: collapsing on blur would shift the page under the tap that caused it.
+$("key").addEventListener("change", e => {
+  const k = e.target.value.trim();
+  if (k) store.set("porter.key", k); else store.del("porter.key");
+});
+$("changeKey").addEventListener("click", e => { e.preventDefault(); editingKey = true; showKey(); $("key").focus(); $("key").select(); });
+showKey();
 $("model").addEventListener("change", e => store.set("porter.model", e.target.value));
-$("forget").addEventListener("click", e => { e.preventDefault(); store.del("porter.key"); $("key").value = ""; });
+$("forget").addEventListener("click", e => { e.preventDefault(); store.del("porter.key"); $("key").value = ""; editingKey = false; showKey(); });
 
 let pages = [];   // { full: HTMLCanvasElement, small: HTMLCanvasElement }
 let result = null;
@@ -388,6 +406,7 @@ function credentials(statusEl) {
   const key = $("key").value.trim();
   if (!key) { setStatus("Enter your API key first.", "error", statusEl); $("key").focus(); return null; }
   store.set("porter.key", key);
+  if (!$("keyEntry").hidden) setTimeout(() => { editingKey = false; showKey(); });
   return { key };
 }
 
@@ -424,8 +443,11 @@ async function toCanvas(file, maxEdge) {
 }
 
 async function addFiles(fileList) {
-  for (const f of fileList) {
-    if (!f.type.startsWith("image/")) continue;
+  const files = [...fileList].filter(f => f.type.startsWith("image/"));
+  if (!files.length) return;
+  $("scanBtn").disabled = $("clearBtn").disabled = true;
+  for (const [n, f] of files.entries()) {
+    setStatus(files.length > 1 ? `Adding photo ${n + 1} of ${files.length}…` : "Adding photo…", "busy");
     try {
       const full = await toCanvas(f, 3000);   // cap memory on phones
       const small = await toCanvas(f, MAX_EDGE);
@@ -509,7 +531,39 @@ async function getOcr() {
   return ocrWorker;
 }
 
-const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact)\b\s*:?/i;
+// Photos are often sideways. If the first read looks like gibberish, try the
+// page turned each way and keep the reading with the most confident words;
+// boxes are then mapped back onto the page as photographed.
+const goodWords = data => (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words)))
+  .filter(w => w.confidence > 70 && /[A-Za-z]{3,}/.test(w.text)).length;
+function rotated(src, rot) {
+  const c = el("canvas", { width: rot === 180 ? src.width : src.height, height: rot === 180 ? src.height : src.width });
+  const ctx = c.getContext("2d");
+  ctx.translate(c.width / 2, c.height / 2); ctx.rotate(rot * Math.PI / 180);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  return c;
+}
+async function recognizeUpright(worker, src) {
+  let best = { data: (await worker.recognize(src, {}, { blocks: true })).data, rot: 0 };
+  best.score = goodWords(best.data);
+  if (best.score >= 12) return best;
+  for (const rot of [90, 270, 180]) {
+    const data = (await worker.recognize(rotated(src, rot), {}, { blocks: true })).data;
+    const score = goodWords(data);
+    if (score > best.score * 1.5 + 3) best = { data, rot, score };
+  }
+  return best;
+}
+// A box found on the page turned clockwise by rot degrees, back on the original W x H page.
+function unrotate(b, rot, W, H) {
+  const { x0, y0, x1, y1 } = b;
+  const xy = rot === 90 ? { x0: y0, x1: y1, y0: H - x1, y1: H - x0 }
+    : rot === 270 ? { x0: W - y1, x1: W - y0, y0: x0, y1: x1 }
+    : rot === 180 ? { x0: W - x1, x1: W - x0, y0: H - y1, y1: H - y0 } : { x0, y0, x1, y1 };
+  return { ...b, ...xy };
+}
+
+const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact|operator|tester|inspector|technician)\b\s*:?/i;
 const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
 const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d[d.length - 1 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
 
@@ -543,11 +597,11 @@ function findPersonalData(data, page) {
   for (const line of lines) {
     const t = line.text;
     boxMatch(line, /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "email");
-    boxMatch(line, /(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; });
+    boxMatch(line, /(?<![\d+])(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d(?!\d)/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; });
     boxMatch(line, /\b(?:\d[ -]?){13,19}\b/g, "account_or_card_number", m => luhn(digitsOf(m)));
     boxMatch(line, /(?:\*{2,}|[xX]{3,})[\s-]?\d{4}\b/g, "account_or_card_number");
     if (/sort|account|acct|a\/c/i.test(t)) boxMatch(line, /\b\d{2}-\d{2}-\d{2}\b|\b\d{8}\b/g, "account_or_card_number");
-    boxMatch(line, /\b\d{4}\s?\d{3}\s?\d{4}\b|\b\d{11}\b/g, "v5c_document_reference", m => !/^0/.test(m));
+    if (!/serial|s\/n|part|invoice|order|vts|batch/i.test(t)) boxMatch(line, /(?<!\d)(?:\d{4}\s?\d{3}\s?\d{4}|\d{11})(?!\d)/g, "v5c_document_reference", m => !/^0/.test(m));
     boxMatch(line, /\b(?:Mr|Mrs|Ms|Miss|Mx|Dr)\.?\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3}/g, "person_name");
     // A postcode: box its line and the address lines stacked above it.
     if (/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i.test(t)) {
@@ -556,7 +610,7 @@ function findPersonalData(data, page) {
     }
     // "Customer: Jane Smith": box what follows the label, or the line below if nothing does.
     const isSignature = /\b(signature|signed|sign here)\b/i.test(t);
-    const lab = !isSignature && t.match(LABEL_NAME);
+    const lab = !isSignature && !/customer'?s\s+copy/i.test(t) && t.match(LABEL_NAME);
     if (lab) {
       const after = line.spans.filter(s => s.start >= lab.index + lab[0].length).map(s => s.w);
       const stop = after.findIndex(w => /:$/.test(w.text));
@@ -618,8 +672,8 @@ $("scanBtn").onclick = async () => {
     const worker = await getOcr();
     for (const [i, p] of pages.entries()) {
       ocrProgress = m => { if (m.status === "recognizing text") setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy"); };
-      const { data } = await worker.recognize(p.small, {}, { blocks: true });
-      p.local = findPersonalData(data, i + 1);
+      const { data, rot } = await recognizeUpright(worker, p.small);
+      p.local = findPersonalData(data, i + 1).map(b => unrotate(b, rot, p.small.width, p.small.height));
       p.ocrText = data.text || "";
     }
   } catch (err) {
@@ -660,19 +714,27 @@ function afterChecks() {
       (blocked.length === 1 ? "it" : "they") + " won't be sent.";
     $("removeBlocked").textContent = pages.length === blocked.length ? "Remove and start again" : `Remove ${blocked.length === 1 ? "that page" : "those pages"}`;
   }
-  const verdict = !blocked.length && notCarVerdict(pages.map(p => p.ocrText || "").join("\n"));
-  confirmedForCar = false;
-  $("notCarAsk").hidden = !verdict;
-  $("notCarText").textContent = verdict || "";
-  $("sendBtn").disabled = !!verdict || blocked.length > 0;
+  const doubtful = blocked.length ? -1 : pages.findIndex(p => !p.keep && notCarKind(p.ocrText || ""));
+  confirmedForCar = pages.some(p => p.keep);
+  $("notCarAsk").hidden = doubtful < 0;
+  if (doubtful >= 0) {
+    const kind = notCarKind(pages[doubtful].ocrText);
+    $("notCarText").textContent = (pages.length > 1 ? `Page ${doubtful + 1} looks like ${kind}` : `This looks like ${kind}`) + ", not a car document.";
+    $("notCarNo").textContent = pages.length > 1 ? `No, remove page ${doubtful + 1}` : "No, remove it";
+    $("notCarAsk").dataset.page = doubtful;
+  }
+  $("sendBtn").disabled = doubtful >= 0 || blocked.length > 0;
 }
-$("removeBlocked").onclick = () => {
-  const keep = pages.filter(p => !p.person);
+function removePages(drop) {
+  const keep = pages.filter((p, i) => !drop(p, i));
   if (!keep.length) { $("clearBtn").click(); setStatus("Removed. Nothing was sent."); return; }
   pages = keep;
   pages.forEach((p, i) => p.local.forEach(b => { b.page = i + 1; }));
   $("thumbs").replaceChildren(...pages.map((p, i) => el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` })));
   afterChecks();
+}
+$("removeBlocked").onclick = () => {
+  removePages(p => p.person);
 };
 
 // Is this a car document at all? Judged on the phone from the OCR text, so
@@ -691,18 +753,19 @@ const LOOKS_LIKE = [
   ["an identity document", /\b(passport|nationality|place of birth)\b/i],
   ["a shop receipt", /\b(tesco|sainsbury'?s|asda|aldi|lidl|morrisons|waitrose|co-?op|change due|cashier|clubcard)\b/i],
 ];
-function notCarVerdict(text) {
-  const words = text.match(/[A-Za-z]{2,}/g) || [];
+// What a page looks like, if it doesn't look like car paperwork; null if it does.
+function notCarKind(text) {
   if (ocrFailedLast) return null;
-  if (words.length < 8) return "This looks like a photo with little or no text, not a car document.";
+  const words = text.match(/[A-Za-z]{3,}/g) || [];
+  if (words.length < 8) return "a photo with little or no text";
   const hits = new Set((text.toLowerCase().match(VEHICLE_WORDS) || []));
   if (hits.size + (UK_PLATE.test(text) ? 2 : 0) >= 2) return null;
   const kind = LOOKS_LIKE.map(([name, re]) => [name, (text.match(new RegExp(re.source, "gi")) || []).length]).sort((a, b) => b[1] - a[1])[0];
-  return `This looks like ${kind[1] ? kind[0] : "a document that isn't about a car"}, not a car document.`;
+  return kind[1] ? kind[0] : "a document that isn't about a car";
 }
 let ocrFailedLast = false, confirmedForCar = false;
-$("notCarYes").onclick = () => { confirmedForCar = true; $("notCarAsk").hidden = true; $("sendBtn").disabled = false; };
-$("notCarNo").onclick = () => { $("clearBtn").click(); setStatus("Removed. Nothing was sent."); };
+$("notCarYes").onclick = () => { pages[+$("notCarAsk").dataset.page].keep = true; afterChecks(); };
+$("notCarNo").onclick = () => { const n = +$("notCarAsk").dataset.page; removePages((p, i) => i === n); };
 
 // Step 2: the owner checks the boxes. Tap toggles a box; in draw mode, drag adds one.
 let drawing = false;
@@ -733,8 +796,15 @@ function paintCheck(c, p, draft) {
 function checkSummary() {
   const all = pages.flatMap(p => p.local);
   const on = all.filter(b => b.on).length;
-  $("checkSummary").textContent = `${on} area${on === 1 ? "" : "s"} will be blacked out` +
-    (all.length > on ? `, ${all.length - on} uncovered by you` : "") + ". Faint boxes turn solid black when sent.";
+  const found = all.filter(b => b.source === "device").length;
+  $("checkLead").textContent = found
+    ? "Your phone found these personal details and will black them out before the pages leave it."
+    : "Your phone didn't find any personal details on " + (pages.length > 1 ? "these pages." : "this page.");
+  $("checkSummary").textContent = on
+    ? `${on} area${on === 1 ? "" : "s"} will be blacked out${all.length > on ? `, ${all.length - on} uncovered by you` : ""}. Faint boxes turn solid black when sent.`
+    : found ? "Nothing will be blacked out: you've uncovered everything your phone found."
+    : "No personal details found, so nothing needs blacking out. If you can see any, tap Draw a box and cover them.";
+  $("sendBtn").textContent = on ? "Send blacked-out pages" : "Send pages";
 }
 
 function showDeviceCheck() {
