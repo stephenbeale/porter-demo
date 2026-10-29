@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#1f6feb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Porter">
 <title>Porter Demo</title>
 <style>
 :root {
@@ -62,6 +67,7 @@ textarea { font: inherit; resize: vertical; }
 label.check { display: flex; align-items: center; gap: 10px; font-weight: 500; margin: 8px 0; }
 label.check input { width: 20px; height: 20px; margin: 0; }
 .linkbtn { background: none; border: 0; padding: 4px 6px; color: var(--accent); cursor: pointer; font: inherit; }
+.feedback { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
 .sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
 .sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
 .docs { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -90,6 +96,13 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 <main>
   <h1>Porter <span class="muted small">demo</span></h1>
   <p class="muted small">Scan a service invoice, MOT certificate or receipt. AI reads the details and finds personal data to black out.</p>
+
+  <section class="card" id="installTip" hidden>
+    <h2>Add Porter to your Home Screen</h2>
+    <p class="small">On iPhone, tap Share <span aria-hidden="true">⬆</span> then <b>Add to Home Screen</b>, and open Porter from there. Safari deletes a website's saved data after 7 days without a visit; Home Screen apps keep theirs.</p>
+    <p class="small muted">The Home Screen app has its own storage. If you've already saved history here, tap <b>Back up</b> under "Your car's history" first, then <b>Restore</b> it in the app.</p>
+    <div class="row"><button class="btn secondary" id="installDismiss" type="button">Got it</button></div>
+  </section>
 
   <section class="card" id="settings">
     <h2>1. Your Anthropic API key</h2>
@@ -141,6 +154,19 @@ label.check input { width: 20px; height: 20px; margin: 0; }
         <button class="btn secondary" id="keepBtn" type="button">📎 Keep for selling</button>
       </div>
       <p class="muted small" id="keepNote">Checked the boxes? Keep a redacted copy with this visit so Selling mode can attach it for buyers.</p>
+      <div class="feedback" id="fbBox">
+        <p style="font-weight:600;margin:0 0 8px">Were all your personal details covered?</p>
+        <div class="row">
+          <button class="btn secondary" id="fbYes" type="button">👍 Yes, all covered</button>
+          <button class="btn secondary" id="fbNo" type="button">Missed something</button>
+        </div>
+        <div id="fbMore" hidden>
+          <label for="fbComment">What was missed? (optional, don't type the personal details themselves)</label>
+          <textarea id="fbComment" rows="2" placeholder="e.g. my phone number on the back page"></textarea>
+          <div class="row" style="margin-top:8px"><button class="btn" id="fbSend" type="button">Send</button></div>
+        </div>
+        <p class="small muted" id="fbThanks" hidden></p>
+      </div>
     </section>
     <section class="card">
       <h2>Details</h2>
@@ -179,11 +205,18 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <div id="adviceList"></div>
   </section>
 
-  <section class="card" id="historyCard" hidden>
+  <section class="card" id="historyCard">
     <h2>Your car's history</h2>
     <p class="muted small">Saved in this browser only, so it builds up as you scan. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
     <table><tbody id="historyRows"></tbody></table>
-    <p class="small muted" id="historyEmpty">No documents yet; advice notes are listed above.</p>
+    <p class="small muted" id="historyEmpty">No documents saved yet.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn secondary" id="backupBtn" type="button">⬇ Back up</button>
+      <button class="btn secondary" id="restoreBtn" type="button">⬆ Restore</button>
+    </div>
+    <input id="restoreFile" type="file" accept="application/json,.json">
+    <p class="muted small">A backup is one file with your history and kept documents (personal details already blacked out). Use it to move to a new phone or into the Home Screen app.</p>
+    <div class="status" id="historyStatus" role="status" aria-live="polite"></div>
   </section>
 
   <section class="card" id="sellCard">
@@ -454,6 +487,9 @@ function addField(dl, label, value) {
 function render() {
   const r = result;
   $("results").hidden = false;
+  $("fbMore").hidden = $("fbThanks").hidden = true;
+  $("fbYes").disabled = $("fbNo").disabled = false;
+  $("fbComment").value = "";
   renderCanvases();
   $("piiList").replaceChildren(...r.pii.map(p => {
     const li = document.createElement("li");
@@ -524,12 +560,18 @@ const VISIT_FIELDS = ["doc_type", "registration", "vin", "make_model", "date_fir
 function loadHistory() {
   try {
     const h = JSON.parse(store.get(HISTORY_KEY));
-    if (Array.isArray(h?.visits) && Array.isArray(h?.notes)) return h;
+    if (Array.isArray(h?.visits) && Array.isArray(h?.notes)) return { feedback: [], ...h };
   } catch {}
-  return { visits: [], notes: [] };
+  return { visits: [], notes: [], feedback: [] };
 }
 const saved = loadHistory();
-const saveHistory = () => store.set(HISTORY_KEY, JSON.stringify(saved));
+let persistAsked = false;
+function saveHistory() {
+  store.set(HISTORY_KEY, JSON.stringify(saved));
+  // Ask the browser not to evict our storage under pressure (Chrome grants it
+  // quietly for sites in use; Safari decides for itself).
+  if (!persistAsked) { persistAsked = true; navigator.storage?.persist?.().catch(() => {}); }
+}
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 let lastVisitId = "";
 const KEEP_HINT = $("keepNote").textContent;   // the visit scanned in this tab, offered first for advice
@@ -551,7 +593,6 @@ const workSummary = v => (v.work_items.length ? v.work_items : v.line_items.filt
 
 function renderHistory() {
   const visits = [...saved.visits].sort(byDateDesc);
-  $("historyCard").hidden = !visits.length && !saved.notes.length;
   $("historyRows").replaceChildren(...visits.map(v => {
     const del = el("button", { className: "linkbtn", type: "button", ariaLabel: "Delete visit" }, "✕");
     del.onclick = () => {
@@ -579,7 +620,7 @@ function renderHistory() {
 $("clearHistory").onclick = e => {
   e.preventDefault();
   if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
-  saved.visits = []; saved.notes = []; lastVisitId = ""; saveHistory(); renderHistory();
+  saved.visits = []; saved.notes = []; saved.feedback = []; lastVisitId = ""; saveHistory(); renderHistory();
   pageStore.clear();
   $("saleOut").hidden = true;
 };
@@ -900,6 +941,74 @@ async function renderSaleDocs(visits) {
     el("p", { className: "muted small" }, "As issued, with the owner's personal details blacked out."),
     el("div", { className: "docs" }, ...figures)));
 }
+
+// Redaction feedback: the beta's most important question. Kept with the
+// history; sendFeedback() also reports it when a beta server is set up.
+function recordFeedback(covered, comment = "") {
+  const entry = { at: new Date().toISOString(), model: $("model").value, doc_type: result?.doc_type || "",
+    pages: pages.length, pii_boxes: result?.pii.length ?? 0, covered, comment: comment.slice(0, 1000) };
+  saved.feedback.push(entry);
+  saveHistory();
+  sendFeedback(entry);
+  $("fbYes").disabled = $("fbNo").disabled = true;
+  $("fbMore").hidden = true;
+  $("fbThanks").hidden = false;
+  $("fbThanks").textContent = covered ? "Thanks. Still glance over every page before sharing." : "Thanks, noted. Don't share this one until you've covered what was missed.";
+}
+async function sendFeedback(entry) {}
+$("fbYes").onclick = () => recordFeedback(true);
+$("fbNo").onclick = () => { $("fbMore").hidden = false; $("fbComment").focus(); };
+$("fbSend").onclick = () => recordFeedback(false, $("fbComment").value.trim());
+
+// Backup and restore: one JSON file with the history and kept pages.
+const blobToDataUrl = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+$("backupBtn").onclick = async () => {
+  const pagesOut = {};
+  for (const v of saved.visits.filter(v => v.keptPages)) {
+    const kept = await pageStore.get(v.id);
+    if (kept) pagesOut[v.id] = await Promise.all(kept.map(async p => ({ data: await blobToDataUrl(p.blob) })));
+  }
+  const backup = { app: "porter-demo", version: 1, exportedAt: new Date().toISOString(), history: saved, pages: pagesOut };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: "application/json" }));
+  el("a", { href: url, download: `porter-backup-${todayIso()}.json` }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus(`Backed up ${saved.visits.length} document${saved.visits.length === 1 ? "" : "s"} and ${saved.notes.length} note${saved.notes.length === 1 ? "" : "s"}.`, "", $("historyStatus"));
+};
+$("restoreBtn").onclick = () => $("restoreFile").click();
+$("restoreFile").onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const status = $("historyStatus");
+  try {
+    const b = JSON.parse(await file.text());
+    if (b?.app !== "porter-demo" || !Array.isArray(b.history?.visits)) throw new Error("that isn't a Porter backup file");
+    const have = new Set([...saved.visits, ...saved.notes].map(x => x.id));
+    const visits = b.history.visits.filter(v => !have.has(v.id));
+    const notes = (b.history.notes || []).filter(n => !have.has(n.id));
+    for (const v of visits) {
+      const kept = b.pages?.[v.id];
+      if (kept?.length) {
+        await pageStore.set(v.id, await Promise.all(kept.map(async p => ({ blob: await (await fetch(p.data)).blob() }))));
+      } else delete v.keptPages;
+    }
+    const seen = new Set(saved.feedback.map(f => f.at));
+    saved.visits.push(...visits);
+    saved.notes.push(...notes);
+    saved.feedback.push(...(b.history.feedback || []).filter(f => !seen.has(f.at)));
+    saveHistory(); renderHistory();
+    setStatus(`Restored ${visits.length} document${visits.length === 1 ? "" : "s"} and ${notes.length} note${notes.length === 1 ? "" : "s"}` +
+      (visits.length + notes.length ? "." : " (everything in the backup was already here)."), "", status);
+  } catch (err) {
+    setStatus("Couldn't restore: " + err.message, "error", status);
+  }
+};
+
+// iPhone Safari outside a Home Screen app: suggest installing, once.
+const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+$("installTip").hidden = !ios || standalone || store.get("porter.installTipDone") === "1";
+$("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $("installTip").hidden = true; };
 
 renderHistory();
 </script>
