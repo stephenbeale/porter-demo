@@ -129,6 +129,11 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 .plate span { padding: 5px 8px; white-space: nowrap; }
 button.plate { cursor: pointer; padding: 0; font-family: "Arial Narrow", Arial, sans-serif; }
 .plate .plate-chev { padding: 5px 6px 5px 0; font-size: 12px; align-self: center; }
+.diy { margin: 12px 0 0; border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; }
+.diy summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+.diy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.diy-grid label { margin: 0; }
+.diy textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--bg); color: var(--text); }
 .car-tools-box { margin: 10px 0 0; }
 .car-tools-box summary { cursor: pointer; font-weight: 700; font-size: 14px; color: var(--accent); width: max-content; }
 .car-tools-box summary span { font-weight: 500; }
@@ -310,6 +315,20 @@ h3.panel-head { justify-content: flex-start; }
       <button class="btn secondary" id="filesBtn" type="button">🖼 Choose images</button>
       <button class="btn secondary" id="docFileBtn" type="button">📄 Upload a PDF or file</button>
     </div>
+    <details class="diy" id="diyBox">
+      <summary>🔧 Did the work yourself? Log it</summary>
+      <p class="small muted" style="margin:8px 0">Say what you did and what you used. Photos of the part, the receipt or the job? Add them above first: they're checked and redacted as usual, then kept with this job.</p>
+      <div class="diy-grid">
+        <label>Date<input id="diyDate" type="date"></label>
+        <label>Mileage<input id="diyMiles" type="text" inputmode="numeric" placeholder="e.g. 33,500"></label>
+      </div>
+      <label for="diyWhat">What you did</label>
+      <textarea id="diyWhat" rows="3" placeholder="e.g. Changed the oil and filter: 4.5 litres of 5W30 £32, Bosch filter £8"></textarea>
+      <label for="diyCost">Total spent (optional)</label>
+      <input id="diyCost" type="text" inputmode="decimal" placeholder="£">
+      <button class="btn" id="diySave" type="button" style="margin-top:10px;width:100%">Save this job</button>
+      <div class="status" id="diyStatus" role="status" aria-live="polite"></div>
+    </details>
     <input id="camera" type="file" accept="image/*" capture="environment">
     <input id="files" type="file" accept="image/*" multiple>
     <input id="docFile" type="file" accept="application/pdf,.pdf,image/*" multiple>
@@ -570,7 +589,7 @@ h3.panel-head { justify-content: flex-start; }
   </section>
 
   <section class="card" id="sellCard" data-tab="sell">
-    <h2>Selling mode</h2>
+    <div class="car-bar"><h2>Selling mode</h2><div class="plate-wrap plate-copy" hidden></div></div>
     <p class="muted small">Turn your saved history into a sale-ready summary for buyers: the service record, recent work, selling points and an honest list of known issues.</p>
     <label class="check"><input type="checkbox" id="sellReg" checked> Show registration (buyers use it for history checks)</label>
     <label class="check"><input type="checkbox" id="sellVin"> Show VIN</label>
@@ -597,7 +616,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.30-39";
+const APP_VERSION = "2026.10.30-41";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1133,6 +1152,7 @@ function stopRun() {
   stayAwake(false);
 }
 function resetPages() {
+  diy = null;
   stopRun();
   if (prepBusy) { ocrWorker?.terminate?.(); ocrWorker = null; }
   prepGen++; prepBusy = 0; prepQueue = peopleQueue = Promise.resolve(); prepNote("");
@@ -1679,6 +1699,47 @@ $("saveAnyway").onclick = () => { storeVisit(result); $("saveAsk").hidden = true
 $("dontSave").onclick = () => { $("saveAsk").hidden = true; $("resultTitle").textContent = "Not saved"; };
 $("stopAdding").onclick = e => { e.preventDefault(); addingTo = ""; showAddingTo(); };
 
+// Work done yourself: a few words (plus any photos of the part, receipt or
+// job, added above as usual) become a job like any other, "Done myself".
+// With photos it goes through the normal checks; without, only the words
+// are sent.
+var diy = null;   // var: resetPages can run before this line
+const diyText = d => `The owner did this work themselves (DIY) on ${d.date}${d.mileage ? ` at ${d.mileage} miles` : ""}. In their words: """${d.what}"""${d.cost ? ` They spent £${d.cost} in total.` : ""} Record it as this visit: date and mileage as given, a line item for each part and piece of work they describe (plain names, prices only where they give them), garage fields empty. Any pages are photos of the parts, the receipt or the job.`;
+function applyDiy(r, d) {
+  r.service_mode = "diy"; r.garage_name = ""; r.garage_address = ""; r.garage_postcode = "";
+  r.date = d.date; r.vehicle_related = true; r.doc_type = "own_work";
+  const miles = Math.round(+String(d.mileage).replace(/[^\d.]/g, ""));
+  if (miles) r.mileage = miles;
+  const cost = +String(d.cost).replace(/[^\d.]/g, "");
+  if (cost) r.total_cost = cost;
+  return r;
+}
+function resetDiy() { $("diyWhat").value = $("diyMiles").value = $("diyCost").value = ""; $("diyDate").value = todayIso(); $("diyBox").open = false; setStatus("", "", $("diyStatus")); }
+$("diyBox").addEventListener("toggle", () => { if ($("diyBox").open && !$("diyDate").value) $("diyDate").value = todayIso(); });
+$("diySave").onclick = async () => {
+  const what = $("diyWhat").value.trim();
+  if (!what) { setStatus("Say what you did first.", "error", $("diyStatus")); $("diyWhat").focus(); return; }
+  const d = { date: $("diyDate").value || todayIso(), mileage: $("diyMiles").value.trim(), what, cost: $("diyCost").value.trim() };
+  if (pages.length) { diy = d; setStatus("Checking your photos first, then you'll send them with this job.", "", $("diyStatus")); $("scanBtn").click(); return; }
+  const cred = credentials($("diyStatus"));
+  if (!cred) return;
+  $("diySave").disabled = true;
+  setStatus("Saving… (AI is sorting out the parts and work, 5-20 seconds)", "busy", $("diyStatus"));
+  try {
+    const msg = await callClaude(cred, { model: $("model").value, max_tokens: 8000, system: SYSTEM,
+      output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
+      messages: [{ role: "user", content: diyText(d) + " There are no pages, so return empty pii and unboxed_numbers." }] });
+    result = applyDiy(normalizeScan(JSON.parse(msg.content.find(b => b.type === "text")?.text)), d);
+    result.pii = []; result.unboxed_numbers = [];
+    pages = [];
+    storeVisit(result);
+    $("resultStatus").textContent = `Logged the job you did yourself on ${niceDate(d.date)}.`;
+    resetDiy();
+    showJustAdded(false);
+  } catch (err) { setStatus("Couldn't save it: " + err.message + failHint(err), "error", $("diyStatus")); }
+  finally { $("diySave").disabled = false; }
+};
+
 // AI's backstop for the phone's sorting: pages it says are a different
 // document can go round again on their own, straight after this one.
 function showSplit() {
@@ -1879,6 +1940,7 @@ $("sendBtn").onclick = async () => {
   });
   const roles = pages.map((p, i) => p.role && `page ${i + 1} is ${ROLE_NOTES[p.role]}`).filter(Boolean);
   if (roles.length) content.push({ type: "text", text: `The owner says ${roles.join("; ")}. Use it as part of this visit: record a part from a photo as a line item if you can identify it, without a price unless one is shown.` });
+  if (diy) content.push({ type: "text", text: diyText(diy) });
   content.push({ type: "text", text: "Extract the fields and personal-data boxes." });
   const body = {
     model, max_tokens: 16000, system: SYSTEM,
@@ -1893,6 +1955,7 @@ $("sendBtn").onclick = async () => {
     if (sendRun !== runId) return;   // the pages were removed while this was out
     const text = msg.content.find(b => b.type === "text")?.text;
     result = normalizeScan(JSON.parse(text));
+    if (diy) applyDiy(result, diy);
     // Boxes come back in the sent image's pixels; put them back on the page.
     for (const b of [...result.pii, ...result.unboxed_numbers]) {
       const k = 1 / (scales[b.page - 1] || 1);
@@ -1910,9 +1973,18 @@ $("sendBtn").onclick = async () => {
     }
     if (result.content_flag === "shows_person")   // noted, never blocking
       result.notes = [result.notes, `Noted, not a problem: ${result.content_flag_reason || "part of a person shows on a page."}`].filter(Boolean).join(" ");
+    // The AI only saw black where the phone had already redacted, but it
+    // may still box those spots: they're not misses, so only genuinely new
+    // boxes (mostly outside anything already covered) count.
+    const covered = pages.flatMap(p => p.local.filter(b => b.on).map(({ on, ...b }) => b));
+    const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+    result.pii = result.pii.filter(a => {
+      const area = Math.max(1, (a.x1 - a.x0) * (a.y1 - a.y0));
+      return covered.filter(b => b.page === a.page).reduce((t, b) => t + overlap(a, b), 0) / area < 0.5;
+    });
     const aiFound = result.pii.length;
     result.pii.forEach(p => { p.source = "ai"; });
-    result.pii.unshift(...pages.flatMap(p => p.local.filter(b => b.on).map(({ on, ...b }) => b)));
+    result.pii.unshift(...covered);
     const added = crossCheck(result);
     const usd = costUsd(msg, model);
     $("usage").textContent = `${msg.model} · sent ${Math.round(sentBytes / 1024)} KB of images · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
@@ -1924,6 +1996,7 @@ $("sendBtn").onclick = async () => {
     $("saveAsk").hidden = !askFirst;
     if (askFirst) $("saveAskText").textContent = `This looks like ${result.looks_like || "something that isn't about a car"}, not a car document.`;
     else storeVisit(result);
+    if (diy && !askFirst) { diy = null; resetDiy(); }
     $("resultTitle").textContent = askFirst ? "Read, not saved yet" : merged ? `Added to your ${merged} visit` : "Saved to your history";
     $("doneBtn").textContent = laterDocs.length ? `Done: next is ${laterDocs[0].label}` : "Done: add another document";
     showSplit();
@@ -2012,8 +2085,15 @@ function comparePage(i) {
   return el("div", { className: "page-compare" }, numbered(frame, i + 1),
     el("div", { className: "compare-slider small" }, el("span", {}, "◀ Boxes"), slider, el("span", {}, "Buyer sees ▶")));
 }
+// Only pages with something redacted get the before/after slider; a photo
+// of a part with nothing to cover just gets a line.
 function renderCanvases() {
-  $("canvases").replaceChildren(...pages.map((_, i) => comparePage(i)));
+  const none = [];
+  $("canvases").replaceChildren(...pages.map((p, i) => {
+    if (boxesFor(i, p).length) return comparePage(i);
+    none.push(i + 1); return null;
+  }).filter(Boolean),
+  ...(none.length ? [el("p", { className: "small muted" }, `${none.length === pages.length ? (pages.length > 1 ? "These uploads have" : "This upload has") : `Upload${none.length > 1 ? "s" : ""} ${none.join(", ")} ${none.length > 1 ? "have" : "has"}`} nothing personal on ${none.length > 1 ? "them" : "it"}, so there's nothing to redact.`)] : []));
 }
 
 $("downloadBtn").onclick = () => {
@@ -2060,7 +2140,7 @@ function render() {
   addField(dl, "First registered", r.date_first_registered);
   addField(dl, "Date", r.date);
   addField(dl, "Mileage", r.mileage != null ? `${r.mileage.toLocaleString()} ${r.mileage_unit !== "unknown" ? r.mileage_unit : ""}` : null);
-  addField(dl, "Garage", [r.garage_name, r.service_mode === "mobile" ? "(mobile)" : ""].filter(Boolean).join(" "));
+  addField(dl, "Garage", r.service_mode === "diy" ? "Done myself" : [r.garage_name, r.service_mode === "mobile" ? "(mobile)" : ""].filter(Boolean).join(" "));
   addField(dl, "Garage postcode", r.garage_postcode);
   addField(dl, "Invoice no.", r.invoice_number);
   addField(dl, "Printed total", money(r.total_cost));
@@ -2415,7 +2495,7 @@ function visitEntry(v) {
   const draw = () => {
     body.replaceChildren();
     if (shutVisits.has(v.id)) return;
-    body.append(el("div", { className: "muted small" }, [v.source === "dvsa" ? "DVSA MOT record" : v.service_mode === "mobile" ? ["Mobile", v.garage_name].filter(Boolean).join(" · ") : v.garage_name || "Unknown garage", v.doc_type.replaceAll("_", " ")].join(" · ")));
+    body.append(el("div", { className: "muted small" }, [v.source === "dvsa" ? "DVSA MOT record" : v.service_mode === "diy" ? "🔧 Done myself" : v.service_mode === "mobile" ? ["Mobile", v.garage_name].filter(Boolean).join(" · ") : v.garage_name || "Unknown garage", v.service_mode === "diy" ? "" : v.doc_type.replaceAll("_", " ")].filter(Boolean).join(" · ")));
     const { groups, labour } = groupItems(v.line_items);
     if (groups.length) {
       const tiles = el("div", { className: "tiles" });
@@ -3183,7 +3263,7 @@ function buildPdf(pagesIn) {
 function visitLine(v) {
   return [niceDate(v.date), v.mileage != null ? `${v.mileage.toLocaleString()} miles` : "", visitWhere(v)].filter(Boolean).join(" · ");
 }
-const visitWhere = v => v.source === "dvsa" ? "DVSA MOT record" : v.service_mode === "mobile" ? ["Mobile", v.garage_name].filter(Boolean).join(" · ") : v.garage_name || "";
+const visitWhere = v => v.source === "dvsa" ? "DVSA MOT record" : v.service_mode === "diy" ? "Done myself" : v.service_mode === "mobile" ? ["Mobile", v.garage_name].filter(Boolean).join(" · ") : v.garage_name || "";
 // The summary PDF follows History as Porter shows it: the totals, Last done,
 // Coming up, year by year with completeness, then every visit with its items
 // grouped as in the app. Rows are laid out onto A4 pages here.
