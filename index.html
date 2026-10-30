@@ -54,6 +54,8 @@ input[type=file] { display: none; }
   font-weight: 700; font-size: 14px; color: #fff; text-align: center; padding: 6px; pointer-events: none; }
 .thumb .state.waiting { background: rgba(0,0,0,.45); }
 .thumb .state.busy { background: rgba(31,111,235,.55); }
+.thumb .state.bg { inset: auto 0 0 0; padding: 4px 6px; border-radius: 0 0 8px 8px; font-size: 12px; background: rgba(31,111,235,.75); }
+.thumb .state.bg::before { content: ""; width: 10px; height: 10px; margin-right: 6px; border: 2px solid #fff; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
 .thumb .state.done { background: transparent; align-items: flex-start; justify-content: flex-end; padding: 38px 8px; font-size: 18px; color: var(--good); text-shadow: 0 0 3px #000; }
 .thumb .num, .corner-num { position: absolute; right: 4px; top: 4px; min-width: 26px; padding: 2px 7px; border-radius: 13px; background: var(--accent); color: var(--accent-text); font-size: 14px; font-weight: 800; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.4); pointer-events: none; }
 .numbered { position: relative; margin-bottom: 10px; }
@@ -629,8 +631,13 @@ function markThumb(i, state, text = "") {
   const t = $("thumbs").children[i], o = t?.querySelector(".state");
   if (!o) return;
   o.className = "state" + (state ? " " + state : ""); o.textContent = text; o.hidden = !state;
-  if (state === "busy") t.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  if (state === "busy" && processing && Date.now() - stripTouched > 8000) t.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
 }
+// The strip only follows along on its own if the owner hasn't been sliding
+// through it in the last few seconds.
+let stripTouched = 0;
+for (const [id, ev] of [["thumbs", "pointerdown"], ["thumbs", "touchstart"], ["thumbs", "wheel"], ["thumbSlider", "input"], ["thumbSlider", "pointerdown"]])
+  $(id).addEventListener(ev, () => { stripTouched = Date.now(); }, { passive: true });
 
 // With more pages than fit, a slider shows where you are in the strip and
 // scrolls it ("Pages 4-6 of 13").
@@ -709,7 +716,7 @@ async function addFiles(fileList) {
   if (failed.length) setStatus(`Couldn't open ${failed.length} of ${files.length} photo${files.length > 1 ? "s" : ""}` +
     ` (${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}). If they're in Google Photos, download them to the phone first. ${ready}`, "error");
   else if (ready) setStatus(ready);
-  queueStraighten(pages.slice(before));
+  queuePrepare(pages.slice(before));
 }
 
 // capture="environment" only opens the camera on phones; desktop browsers
@@ -762,7 +769,8 @@ function stopRun() {
 }
 function resetPages() {
   stopRun();
-  straightenGen++; straightenQueue = Promise.resolve();
+  if (prepBusy) { ocrWorker?.terminate?.(); ocrWorker = null; }
+  prepGen++; prepBusy = 0; prepQueue = Promise.resolve();
   closeWebcam();
   pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
@@ -840,29 +848,86 @@ async function recognizeUpright(worker, src, say = () => {}, straightened = fals
   say("turned it upright, reading it again");
   return { data: await read(rotated(src, best.rot)), rot: best.rot };
 }
-// Pages are straightened as soon as they're added, while the owner is still
-// looking through them: a quick read of a small copy each way up, and a
-// sideways page is turned upright in the strip. Process waits for this.
-let straightenQueue = Promise.resolve(), straightenGen = 0;
+// Each page is prepared on the phone as soon as it's added, while the owner is
+// still looking through them. First pass: every new page is turned upright
+// (the thumbnail visibly turns). Second pass: each page is read for personal
+// details and checked for people. Process then only waits for whatever's left.
+let prepQueue = Promise.resolve(), prepGen = 0, prepBusy = 0;
+function prepMark(p, text, done) {
+  const i = pages.indexOf(p);
+  if (i < 0) return;
+  if (done) markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓");
+  else markThumb(i, processing ? "busy" : "busy bg", text);
+  if (processing && !done) setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}${text.match(/\d+%/) ? ` (${text.match(/\d+%/)[0]})` : "…"}`, "busy");
+}
+async function turnThumb(p, rot) {
+  const img = $("thumbs").children[pages.indexOf(p)]?.querySelector("img");
+  if (img && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const k = rot === 180 ? 1 : Math.min(1, img.clientHeight / Math.max(1, img.clientWidth));
+    img.style.transition = "transform .6s ease";
+    img.style.transform = `rotate(${rot === 270 ? -90 : rot}deg) scale(${k})`;
+    await new Promise(r => setTimeout(r, 650));
+  }
+  p.small = p.full = rotated(p.small, rot);
+  renderPages();
+}
 async function straighten(p, gen) {
-  if (p.straightened || gen !== straightenGen) return;
+  if (p.straightened || gen !== prepGen || !pages.includes(p)) return;
+  prepMark(p, "Processing…");
   try {
     const worker = await getOcr();
     const small = scaledCopy(p.small, 1000);
-    const score = async c => gen === straightenGen ? goodWords((await worker.recognize(c, {}, { blocks: true })).data) : 0;
+    const score = async c => gen === prepGen ? goodWords((await withTimeout(worker.recognize(c, {}, { blocks: true }), OCR_PAGE_TIMEOUT_MS)).data) : 0;
     let best = { rot: 0, score: await score(small) };
     if (best.score < 8) for (const rot of [90, 270, 180]) {
       const sc = await score(rotated(small, rot));
       if (sc > best.score * 1.5 + 3) best = { rot, score: sc };
     }
-    if (gen !== straightenGen || !pages.includes(p)) return;
-    if (best.rot) { p.small = p.full = rotated(p.small, best.rot); renderPages(); }
+    if (gen !== prepGen || !pages.includes(p)) return;
+    if (best.rot) await turnThumb(p, best.rot);
     p.straightened = true;
-  } catch {}   // Process does the full check if this couldn't
+  } catch {}   // the read below still checks each way up if this couldn't
 }
-function queueStraighten(added) {
-  const gen = straightenGen;
-  for (const p of added) straightenQueue = straightenQueue.then(() => straighten(p, gen));
+async function readPage(p, gen, people) {
+  const stale = () => gen !== prepGen || !pages.includes(p);
+  if (p.prepared || stale()) return;
+  prepMark(p, "Processing…");
+  if (!p.read) try {
+    const worker = await getOcr();
+    if (stale()) return;
+    ocrProgress = m => { if (m.status === "recognizing text" && !stale()) prepMark(p, `Processing ${Math.round(m.progress * 100)}%`); };
+    const { data, rot } = await withTimeout(recognizeUpright(worker, p.small, () => prepMark(p, "Processing…"), p.straightened), OCR_PAGE_TIMEOUT_MS);
+    if (stale()) return;
+    if (rot) await turnThumb(p, rot);
+    p.local = findPersonalData(data, pages.indexOf(p) + 1);
+    p.ocrText = data.text || ""; p.textPx = smallPrintPx(data); p.unchecked = false;
+  } catch (err) {
+    if (stale()) return;
+    ocrWorker?.terminate?.(); ocrWorker = null;   // a fresh one for the next page
+    p.local = p.local || []; p.ocrText = ""; p.textPx = null; p.unchecked = true;
+    if (err.message !== "timeout") p.ocrError = err.message;
+  } finally { ocrProgress = () => {}; }
+  p.read = true;
+  try {
+    const h = await people;
+    if (stale()) return;
+    p.person = h ? personIn(await withTimeout(h.detect(p.small), OCR_PAGE_TIMEOUT_MS)) : null;
+    p.peopleChecked = !!h;
+  } catch { p.peopleChecked = false; }
+  if (stale()) return;
+  p.prepared = true;
+  prepMark(p, "", true);
+}
+function queuePrepare(added) {
+  const gen = prepGen, todo = added.filter(p => !p.prepared);
+  if (!todo.length) return;
+  const people = getPeopleDetector().catch(() => null);
+  const run = f => { prepQueue = prepQueue.then(() => gen === prepGen && f()).catch(() => {}); };
+  prepBusy++; stayAwake(true);
+  for (const p of todo) run(() => straighten(p, gen));
+  for (const p of todo) run(() => readPage(p, gen, people));
+  run(() => {});
+  prepQueue = prepQueue.then(() => { if (!--prepBusy && !processing) stayAwake(false); });
 }
 
 // A page that takes too long is skipped (the owner covers it by hand) and the
@@ -1038,13 +1103,13 @@ const HUMAN = {
   },
 };
 let peopleDetector = null;
-async function getPeopleDetector() {
-  if (!peopleDetector) {
+function getPeopleDetector() {
+  peopleDetector ||= (async () => {
     if (!window.Human) await loadScript(HUMAN.script, HUMAN.integrity);
     const h = new Human.Human(HUMAN.config);
     await h.load();
-    peopleDetector = h;
-  }
+    return h;
+  })().catch(err => { peopleDetector = null; throw err; });
   return peopleDetector;
 }
 function personIn(r) {
@@ -1057,77 +1122,29 @@ $("scanBtn").onclick = async () => {
   if (!credentials($("status"))) return;
   $("scanBtn").disabled = true;
   $("results").hidden = true;
-  let ocrFailed = null, peopleFailed = null, turned = false;
   const id = ++runId, live = () => id === runId;
   const stopped = new Promise((_, rej) => { cancelRun = () => rej(new Error("cancelled")); });
   stopped.catch(() => {});
-  const orStop = promise => Promise.race([promise, stopped]);
   processing = true; $("thumbs").classList.add("busy"); setRemoveLabel();
-  setStatus("Loading the on-phone checks (about 14 MB, first time only). Keep this screen open: phones pause web pages when locked.", "busy");
-  pages.forEach((p, i) => markThumb(i, "waiting", "Waiting"));
-  setStatus("Getting your pages ready…", "busy");
-  await orStop(straightenQueue).catch(() => {});
-  if (!live()) return;
   stayAwake(true); pausedNote = "";
-  const detector = getPeopleDetector().catch(err => { peopleFailed = err; return null; });
-  const skipped = [];
-  try {
-    for (const [i, p] of pages.entries()) {
-      const worker = await orStop(getOcr());
-      if (!live()) return;
-      let step = "Reading";
-      markThumb(i, "busy", "Processing…");
-      const say = what => { step = what; markThumb(i, "busy", "Processing…"); setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}…`, "busy"); };
-      ocrProgress = m => {
-        if (m.status !== "recognizing text" || step !== "Reading") return;
-        markThumb(i, "busy", `Processing ${Math.round(m.progress * 100)}%`);
-        setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
-      };
-      try {
-        const { data, rot } = await orStop(withTimeout(recognizeUpright(worker, p.small, say, p.straightened), OCR_PAGE_TIMEOUT_MS));
-        if (!live()) return;
-        if (rot) { p.small = p.full = rotated(p.small, rot); turned = true; }
-        p.local = findPersonalData(data, i + 1);
-        p.ocrText = data.text || "";
-        p.textPx = smallPrintPx(data);
-        p.unchecked = false;
-        markThumb(i, "done", "✓");
-      } catch (err) {
-        if (!live()) return;
-        if (err.message !== "timeout") throw err;
-        ocrWorker?.terminate?.(); ocrWorker = null;   // a fresh one for the next page
-        p.local = p.local || []; p.unchecked = true; p.ocrText = ""; p.textPx = null;
-        skipped.push(i + 1);
-        markThumb(i, "busy", "Not checked");
-      }
-    }
-  } catch (err) {
-    if (!live()) return;
-    ocrFailed = err;
-    pages.forEach(p => { p.local = p.local || []; });
-  } finally {
-    if (live()) ocrProgress = () => {};
-  }
-  if (turned) renderPages();
-  const h = await orStop(detector).catch(() => null);
+  pages.forEach((p, i) => p.prepared ? prepMark(p, "", true) : markThumb(i, "waiting", "Waiting"));
+  setStatus(pages.every(p => p.prepared) ? "" : "Processing… (the on-phone checks download about 14 MB the first time). Keep this screen open: phones pause web pages when locked.", "busy");
+  queuePrepare(pages);   // anything not already done or queued
+  await Promise.race([prepQueue, stopped]).catch(() => {});
   if (!live()) return;
-  if (h) {
-    for (const [i, p] of pages.entries()) {
-      setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}…`, "busy");
-      try { p.person = personIn(await orStop(h.detect(p.small))); } catch (err) { if (!live()) return; peopleFailed = err; }
-      if (!live()) return;
-      markThumb(i, "done", "✓");
-    }
-  }
   $("scanBtn").disabled = pages.length === 0;
   processing = false; $("thumbs").classList.remove("busy"); setRemoveLabel();
-  stayAwake(false);
-  pages.forEach((p, i) => markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓"));
+  if (!prepBusy) stayAwake(false);
+  pages.forEach(p => { p.local = p.local || []; prepMark(p, "", true); });
+  pages.forEach((p, i) => p.local.forEach(b => { b.page = i + 1; }));
   setStatus("");
+  const ocrFailed = pages.find(p => p.ocrError)?.ocrError;
+  const skipped = pages.map((p, i) => p.unchecked && !p.ocrError && i + 1).filter(Boolean);
+  const peopleFailed = pages.some(p => !p.peopleChecked);
   ocrFailedLast = !!ocrFailed;
   afterChecks();
   const problems = [
-    ocrFailed && `Your phone couldn't look for personal details (${ocrFailed.message}). Cover them yourself: drag across each one before sending.`,
+    ocrFailed && `Your phone couldn't look for personal details (${ocrFailed}). Cover them yourself: drag across each one before sending.`,
     skipped.length && `Upload${skipped.length > 1 ? "s" : ""} ${skipped.join(", ")} took too long to read, so your phone couldn't check ${skipped.length > 1 ? "them" : "it"}. Cover any personal details yourself (Draw a box), or remove ${skipped.length > 1 ? "those uploads" : "that upload"}.`,
     peopleFailed && "Your phone couldn't check for photos of people, so please make sure none of these pages shows anyone.",
   ].filter(Boolean);
