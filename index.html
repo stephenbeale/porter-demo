@@ -753,10 +753,36 @@ async function recognizeUpright(worker, src, say = () => {}) {
 }
 // A page that takes too long is skipped (the owner covers it by hand) and the
 // worker is restarted, since a stuck job can't be cancelled any other way.
+// Phones freeze a page's code while the screen is off or another app is in
+// front, so the limit counts only time the page is visible: a page isn't
+// marked "not checked" just because the phone was locked.
 function withTimeout(promise, ms) {
-  let timer;
-  return Promise.race([promise, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("timeout")), ms); })]).finally(() => clearTimeout(timer));
+  let timer, left = ms, since = Date.now(), fail;
+  const arm = () => { since = Date.now(); timer = setTimeout(() => fail(new Error("timeout")), left); };
+  const onVis = () => {
+    if (document.hidden) { clearTimeout(timer); left -= Date.now() - since; }
+    else arm();
+  };
+  return Promise.race([promise, new Promise((_, rej) => { fail = rej; if (!document.hidden) arm(); document.addEventListener("visibilitychange", onVis); })])
+    .finally(() => { clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); });
 }
+
+// Keep the screen on while pages are being checked (the phone would otherwise
+// lock and freeze the page), and say so if it was paused anyway.
+let wakeLock = null, busyWork = false;
+async function stayAwake(on) {
+  busyWork = on;
+  try {
+    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch {}   // not supported, or refused (battery saver): carries on without
+}
+let pausedNote = "";
+document.addEventListener("visibilitychange", () => {
+  if (!busyWork) return;
+  if (document.hidden) { pausedNote = "Paused while the screen was off. Carrying on… "; return; }
+  stayAwake(true);   // the lock is dropped whenever the page is hidden; take it again
+});
 const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact|operator|tester|inspector|technician)\b\s*:?/i;
 const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
 const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d[d.length - 1 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
@@ -888,8 +914,9 @@ $("scanBtn").onclick = async () => {
   $("scanBtn").disabled = true;
   $("results").hidden = true;
   let ocrFailed = null, peopleFailed = null, turned = false;
-  setStatus("Loading the on-phone checks (about 14 MB, first time only)…", "busy");
+  setStatus("Loading the on-phone checks (about 14 MB, first time only). Keep this screen open: phones pause web pages when locked.", "busy");
   pages.forEach((p, i) => markThumb(i, "waiting", "Waiting"));
+  stayAwake(true); pausedNote = "";
   const detector = getPeopleDetector().catch(err => { peopleFailed = err; return null; });
   const skipped = [];
   try {
@@ -901,7 +928,7 @@ $("scanBtn").onclick = async () => {
       ocrProgress = m => {
         if (m.status !== "recognizing text" || step !== "Reading") return;
         markThumb(i, "busy", `Reading ${Math.round(m.progress * 100)}%`);
-        setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
+        setStatus(`${pausedNote}Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
       };
       try {
         const { data, rot } = await withTimeout(recognizeUpright(worker, p.small, say), OCR_PAGE_TIMEOUT_MS);
@@ -936,6 +963,7 @@ $("scanBtn").onclick = async () => {
     }
   }
   $("scanBtn").disabled = pages.length === 0;
+  stayAwake(false);
   pages.forEach((p, i) => markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓"));
   setStatus("");
   ocrFailedLast = !!ocrFailed;
