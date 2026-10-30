@@ -25,6 +25,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }   /* .btn and friends set display, which would otherwise win */
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, sans-serif; }
 main { max-width: 640px; margin: 0 auto; padding: 16px 16px 80px; }
 h1 { font-size: 1.5em; margin: 8px 0 2px; } h2 { font-size: 1.1em; margin: 0 0 10px; }
@@ -354,10 +355,28 @@ function showConnect() {
   $("settingsLink").hidden = !connected();
   $("settingsLink").textContent = settingsOpen ? "Hide settings" : "⚙ Key & model";
 }
-function markConnected() {
-  if (connected()) return;
+// Hide the card only once no finger is on the screen, so the page never
+// moves under a tap in progress.
+let pointerDown = false, afterTap = null;
+addEventListener("pointerdown", () => { pointerDown = true; }, true);
+addEventListener("pointerup", () => { pointerDown = false; if (afterTap) { const f = afterTap; afterTap = null; setTimeout(f, 60); } }, true);
+addEventListener("pointercancel", () => { pointerDown = false; }, true);
+const whenNoTap = f => pointerDown ? (afterTap = f) : setTimeout(f);
+let flashTimer = null;
+function markConnected(flash = false) {
+  if (connected() && !flash) return;
   store.set("porter.connected", "1");
-  setTimeout(() => { settingsOpen = false; editingKey = false; showKey(); showConnect(); });
+  whenNoTap(() => {
+    settingsOpen = false; editingKey = false; $("connectProblem").hidden = true;
+    showKey(); showConnect();
+    if (flash) {
+      const link = $("settingsLink");
+      link.textContent = mode === "invite" ? "✓ Invite code accepted" : "✓ Key connected";
+      link.style.color = "var(--good)";
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => { link.style.color = ""; showConnect(); }, 4000);
+    }
+  });
 }
 function disconnect(message) {
   store.del("porter.connected");
@@ -369,13 +388,14 @@ function disconnect(message) {
 $("settingsLink").addEventListener("click", e => { e.preventDefault(); settingsOpen = !settingsOpen; showConnect(); });
 const keyTrouble = (status, message) => status === 401 || status === 403 || /credit balance|api key|authentication/i.test(message || "");
 
-// Check a newly typed key straight away (a free call), so a typo shows up now.
+// Check a newly typed key straight away (a free call): a typo shows up now,
+// and a working key hides the card at once.
 async function verifyKey(k) {
   $("keyCheck").textContent = "checking…";
   try {
     const resp = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: {
       "x-api-key": k, "anthropic-version": API_VERSION, "anthropic-dangerous-direct-browser-access": "true" } });
-    if (resp.ok) { $("keyCheck").textContent = "✓ works"; $("connectProblem").hidden = true; return; }
+    if (resp.ok) { $("keyCheck").textContent = "✓ works"; $("connectProblem").hidden = true; markConnected(true); return; }
     const msg = (await resp.json().catch(() => null))?.error?.message;
     $("keyCheck").textContent = keyTrouble(resp.status, msg) ? "✗ not accepted" : "";
   } catch { $("keyCheck").textContent = ""; }   // offline or blocked: the first real use will tell
@@ -437,7 +457,7 @@ async function checkInvite() {
     const d = await resp.json();
     if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
     out.textContent = `Welcome, ${d.name}. $${d.remaining_usd.toFixed(2)} of today's allowance left.`;
-    markConnected();
+    markConnected(!connected());
   } catch (err) {
     out.className = "small status error"; out.textContent = err.message;
   }
@@ -1672,6 +1692,7 @@ $("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $
 showMode();
 showConnect();
 checkInvite();
+if (mode === "key" && store.get("porter.key") && !connected()) verifyKey(store.get("porter.key"));
 renderHistory();
 renderDueDates();
 </script>
