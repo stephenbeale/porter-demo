@@ -112,8 +112,18 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 .navtab[aria-current=page] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 section[data-tab].off-tab { display: none !important; }
 details > summary { font-weight: 600; }
-.visit { border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 14px 0; }
-.visit.new { border-left-color: var(--good); }
+.visit { position: relative; padding: 2px 0 2px 0; margin: 14px 0; }
+.year-group { border-left: 2px solid var(--rule); margin: 6px 0 0 7px; padding-left: 16px; }
+.year-group .visit::before { content: ""; position: absolute; left: -24px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--card); }
+.year-group .visit.new::before { background: var(--good); }
+.year-head { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 0; font-weight: 800; font-size: 1.1em; }
+.year-head span { font-weight: 500; font-size: .8em; color: var(--text-2); }
+.lastdone { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lastdone button { text-align: left; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); color: var(--text); padding: 8px 10px; font: inherit; cursor: pointer; display: flex; gap: 8px; align-items: flex-start; }
+.lastdone button:disabled { cursor: default; opacity: .7; }
+.lastdone .ld-icon { font-size: 22px; line-height: 1.2; }
+.lastdone b { display: block; font-size: .95em; }
+.lastdone small { display: block; color: var(--text-2); font-size: .8em; line-height: 1.3; }
 .visit-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; padding: 0;
   border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .visit-title { display: block; color: var(--text-2); font-size: .9em; }
@@ -388,6 +398,12 @@ details > summary { font-weight: 600; }
     </div>
     <h2>Your car's history</h2>
     <p class="small" id="historyStats"></p>
+    <div id="overview" hidden>
+      <h3 class="small" style="margin:12px 0 6px">Last done</h3>
+      <div class="lastdone" id="lastDone"></div>
+      <div id="comingUp"></div>
+      <h3 class="small" style="margin:16px 0 0">Timeline</h3>
+    </div>
     <div id="historyList"></div>
     <p class="muted small">Saved on this phone only. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
     <div id="historyEmpty"><p class="small muted">No documents saved yet.</p><button class="btn" type="button" id="firstAdd">➕ Add your first document</button></div>
@@ -442,7 +458,7 @@ details > summary { font-weight: 600; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.30-12";
+const APP_VERSION = "2026.10.30-13";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -2047,6 +2063,49 @@ const chevron = () => { const s = document.createElementNS("http://www.w3.org/20
   s.innerHTML = '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
 const openVisits = new Set();
 
+// "Last done": one tile per area of the car, from the most recent visit
+// that covered it; tapping one opens that visit in the timeline. Below it,
+// what's coming up: MOT and tax from DVLA, and dated mechanic's advice.
+const AREAS = [
+  { label: "Service", icon: "🔧", has: v => { const c = new Set(v.line_items.map(i => i.category)); return (c.has("engine_oil") && c.has("oil_filter")) || v.work_items.some(w => /\bservice\b/i.test(w)) || v.line_items.some(i => /\bservice\b/i.test(i.description)); } },
+  { label: "MOT", icon: "📋", has: v => v.source === "dvsa" || v.doc_type === "mot_certificate" || v.line_items.some(i => i.category === "mot_test") || v.work_items.some(w => /\bmot\b/i.test(w)) },
+  { label: "Tyres", icon: "🛞", has: v => v.line_items.some(i => groupOf(i.category) === "tyres") },
+  { label: "Brakes", icon: "🛑", has: v => v.line_items.some(i => groupOf(i.category) === "brakes") },
+  { label: "Electrical", icon: "⚡", has: v => v.line_items.some(i => groupOf(i.category) === "electrical") },
+  { label: "Major works", icon: "⚙️", has: v => v.line_items.some(i => groupOf(i.category) === "major") },
+];
+function ago(date) {
+  const months = Math.round((Date.now() - new Date(date + "T00:00:00")) / 2629800000);
+  return months < 1 ? "this month" : months < 12 ? `${months} month${months === 1 ? "" : "s"} ago` : (y => `${y} year${y === 1 ? "" : "s"} ago`)(Math.round(months / 12 * 2) / 2);
+}
+const monthYear = d => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+function renderOverview(visits) {
+  $("overview").hidden = !visits.length;
+  if (!visits.length) return;
+  const tiles = [];
+  for (const a of AREAS) {
+    const v = visits.find(x => x.date && a.has(x));
+    if (!v && !["Service", "MOT"].includes(a.label)) continue;
+    const what = v && (a.label === "Service" || a.label === "MOT" ? "" : v.line_items.filter(i => a.has({ ...v, line_items: [i], work_items: [] })).map(i => i.description)[0] || "");
+    const b = el("button", { type: "button", disabled: !v },
+      el("span", { className: "ld-icon", ariaHidden: "true" }, a.icon),
+      el("span", {}, el("b", {}, a.label),
+        el("small", {}, v ? [monthYear(v.date), v.mileage != null ? `${v.mileage.toLocaleString()} mi` : ""].filter(Boolean).join(" · ") : "No record yet"),
+        ...(v ? [el("small", {}, ago(v.date) + (what ? ` · ${what}` : ""))] : [])));
+    if (v) b.onclick = () => { openVisits.add(v.id); renderHistory(); [...$("historyList").querySelectorAll(".visit")].find(e => e.dataset.id === v.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+    tiles.push(b);
+  }
+  $("lastDone").replaceChildren(...tiles);
+  const today = todayIso(), car = saved.vehicle, soon = [];
+  if (car?.motExpiryDate) soon.push([car.motExpiryDate, "📋 MOT due"]);
+  else if (car?.motTestDueDate) soon.push([car.motTestDueDate, "📋 First MOT due"]);
+  if (car?.taxDueDate) soon.push([car.taxDueDate, "🧾 Road tax due"]);
+  for (const n of saved.notes) for (const a of n.parsed.actions || []) if (a.due_date) soon.push([a.due_date, `🔧 ${a.action}${a.approximate ? " (approx.)" : ""}`]);
+  const upcoming = soon.filter(([d]) => d >= today).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 5);
+  $("comingUp").replaceChildren(...(upcoming.length ? [el("h3", { className: "small", style: "margin:14px 0 4px" }, "Coming up"),
+    el("ul", { className: "small", style: "margin:0;padding-left:18px" }, ...upcoming.map(([d, t]) => el("li", {}, `${t} · ${niceDate(d)}`)))] : []));
+}
+
 function visitEntry(v) {
   const isNew = v.id === lastVisitId;
   const spend = v.total_cost ?? sumOf(v.line_items);
@@ -2101,7 +2160,9 @@ function visitEntry(v) {
   };
   head.onclick = () => { openVisits.has(v.id) ? openVisits.delete(v.id) : openVisits.add(v.id); head.ariaExpanded = String(openVisits.has(v.id)); draw(); };
   draw();
-  return el("div", { className: "visit" + (isNew ? " new" : "") }, head, body);
+  const entry = el("div", { className: "visit" + (isNew ? " new" : "") }, head, body);
+  entry.dataset.id = v.id;
+  return entry;
 }
 
 async function openKeptPages(v) {
@@ -2120,12 +2181,22 @@ async function openKeptPages(v) {
 function renderHistory() {
   const visits = [...saved.visits].sort(byDateDesc);
   if (lastVisitId) openVisits.add(lastVisitId);
-  // the newest addition first, then by date
-  const ordered = [...visits.filter(v => v.id === lastVisitId), ...visits.filter(v => v.id !== lastVisitId)];
-  $("historyList").replaceChildren(...ordered.map(visitEntry));
+  // Timeline: visits by year, newest first, with what each year cost.
+  const years = new Map();
+  for (const v of visits) { const y = (v.date || "").slice(0, 4) || "Undated"; if (!years.has(y)) years.set(y, []); years.get(y).push(v); }
+  $("historyList").replaceChildren(...[...years].map(([y, vs]) => {
+    const spend = vs.reduce((t, v) => t + (v.total_cost ?? sumOf(v.line_items) ?? 0), 0);
+    return el("div", {},
+      el("div", { className: "year-head" }, y, el("span", {}, [`${vs.length} visit${vs.length === 1 ? "" : "s"}`, spend ? money(spend) : ""].filter(Boolean).join(" · "))),
+      el("div", { className: "year-group" }, ...vs.map(visitEntry)));
+  }));
+  renderOverview(visits);
   const total = visits.reduce((t, v) => t + (v.total_cost ?? 0), 0);
   const miles = Math.max(0, ...visits.map(v => v.mileage || 0));
-  $("historyStats").textContent = visits.length ? [`🧾 ${visits.length} visit${visits.length === 1 ? "" : "s"}`, total ? `💷 ${money(total)} recorded` : "", miles ? `🛣️ ${miles.toLocaleString()} miles latest` : ""].filter(Boolean).join(" · ") : "";
+  const dated = visits.filter(v => v.date && v.mileage != null), first = dated[dated.length - 1], last = dated[0];
+  const span = first && last ? (new Date(last.date) - new Date(first.date)) / 31557600000 : 0;
+  const perYear = span >= 0.5 && last.mileage > first.mileage ? Math.round((last.mileage - first.mileage) / span / 100) * 100 : 0;
+  $("historyStats").textContent = visits.length ? [`🧾 ${visits.length} visit${visits.length === 1 ? "" : "s"}`, total ? `💷 ${money(total)} recorded` : "", miles ? `🛣️ ${miles.toLocaleString()} miles latest` : "", perYear ? `about ${perYear.toLocaleString()} a year` : ""].filter(Boolean).join(" · ") : "";
 $("historyEmpty").hidden = visits.length > 0;
   const keep = $("adviceVisit").value || lastVisitId;
   $("adviceVisit").replaceChildren(el("option", { value: "" }, visits.length ? "Another visit (enter the date)" : "No saved visits yet"),
