@@ -42,7 +42,13 @@ input[type=password], input[type=text], input[type=date], select, textarea { wid
 .btn:disabled { opacity: .5; cursor: default; }
 input[type=file] { display: none; }
 .thumbs { display: flex; gap: 8px; overflow-x: auto; margin-top: 12px; }
-.thumbs img { height: 84px; border-radius: 8px; border: 1px solid var(--rule); display: block; }
+.thumbs img { height: 132px; border-radius: 8px; border: 1px solid var(--rule); display: block; cursor: zoom-in; }
+#viewer { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.92); display: flex; flex-direction: column; }
+#viewer .bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; color: #fff; }
+#viewer .bar span { flex: 1; font-weight: 600; }
+#viewer .bar button { min-height: 40px; padding: 6px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-size: 15px; }
+#viewer .scroll { flex: 1; overflow: auto; touch-action: pan-x pan-y pinch-zoom; }
+#viewer img { width: 100%; display: block; }
 .thumb { position: relative; flex: none; }
 .thumb button { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
   background: rgba(0,0,0,.65); color: #fff; font-size: 14px; line-height: 28px; padding: 0; cursor: pointer; }
@@ -116,7 +122,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 
   <section class="card" id="settings">
     <p class="small status error" id="connectProblem" hidden></p>
-    <h2>1. Connect</h2>
+    <h2>Connect</h2>
     <div id="inviteBox" hidden>
       <label for="invite">Invite code</label>
       <input id="invite" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. alice-7f3k">
@@ -139,7 +145,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
   </section>
 
   <section class="card">
-    <h2>2. Add pages of one document</h2>
+    <h2>Add pages of one document</h2>
     <div class="row">
       <button class="btn" id="cameraBtn" type="button">📷 Take photo</button>
       <button class="btn secondary" id="filesBtn" type="button">🖼 Choose images</button>
@@ -154,6 +160,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
       </div>
     </div>
     <div class="thumbs" id="thumbs"></div>
+    <p class="muted small" id="thumbHint" hidden>Tap a page to see it full size.</p>
     <div class="row" style="margin-top:12px">
       <button class="btn" id="scanBtn" type="button" hidden>Process</button>
       <button class="btn secondary" id="clearBtn" type="button" hidden>Remove</button>
@@ -258,10 +265,15 @@ label.check input { width: 20px; height: 20px; margin: 0; }
   </section>
 
   <section class="card" id="adviceCard">
-    <h2>3. What did the mechanic say?</h2>
+    <h2>What did the mechanic say?</h2>
     <p class="muted small">Advice they gave you out loud but didn't write down, e.g. "your tyres will want doing by mid-November". AI picks out what to do and when, and suggests reminders.</p>
     <label for="adviceVisit">From which visit?</label>
     <select id="adviceVisit"></select>
+    <p class="muted small" id="noVisits" hidden>No visits saved yet. Process the garage's invoice, or import your MOT history, to link this advice to that visit. Or just give the date below.</p>
+    <div class="row" id="visitManual">
+      <div style="flex:1 1 140px"><label for="visitDate">Visit date</label><input id="visitDate" type="date"></div>
+      <div style="flex:2 1 180px"><label for="visitGarage">Garage (optional)</label><input id="visitGarage" type="text" autocomplete="off" placeholder="e.g. Kings Motor Services"></div>
+    </div>
     <label for="adviceText">In your own words</label>
     <textarea id="adviceText" rows="4" placeholder="Type it, or tap Dictate and say it"></textarea>
     <div class="row" style="margin-top:10px">
@@ -284,11 +296,12 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     </div>
     <input id="restoreFile" type="file" accept="application/json,.json">
     <p class="muted small">A backup is one file with your history and kept documents (personal details already blacked out). Use it to move to a new phone or into the Home Screen app.</p>
+    <p class="small" id="backupNudge"></p>
     <div class="status" id="historyStatus" role="status" aria-live="polite"></div>
   </section>
 
   <section class="card" id="sellCard">
-    <h2>4. Selling mode</h2>
+    <h2>Selling mode</h2>
     <p class="muted small">Turn your saved history into a sale-ready summary for buyers: the service record, recent work, selling points and an honest list of known issues.</p>
     <label class="check"><input type="checkbox" id="sellReg" checked> Show registration (buyers use it for history checks)</label>
     <label class="check"><input type="checkbox" id="sellVin"> Show VIN</label>
@@ -522,11 +535,33 @@ function renderPages() {
   $("thumbs").replaceChildren(...pages.map((p, i) => {
     const x = el("button", { type: "button", ariaLabel: `Remove page ${i + 1}` }, "✕");
     x.onclick = () => removePage(i);
-    return el("div", { className: "thumb" }, el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` }), x);
+    const img = el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` });
+    img.onclick = () => openViewer(i);
+    return el("div", { className: "thumb" }, img, x);
   }));
+  $("thumbHint").hidden = !pages.length;
   $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
   $("clearBtn").textContent = pages.length > 1 ? "Remove all" : "Remove";
 }
+// Full-size look at a page, to check it's the right one before processing.
+function openViewer(i) {
+  closeViewer();
+  const p = pages[i];
+  if (!p) return;
+  const btn = (label, fn) => { const b = el("button", { type: "button" }, label); b.onclick = fn; return b; };
+  const v = el("div", { id: "viewer", role: "dialog", ariaLabel: `Page ${i + 1}` },
+    el("div", { className: "bar" },
+      el("span", {}, `Page ${i + 1} of ${pages.length}`),
+      ...(i > 0 ? [btn("‹", () => openViewer(i - 1))] : []),
+      ...(i < pages.length - 1 ? [btn("›", () => openViewer(i + 1))] : []),
+      btn("Remove", () => { closeViewer(); removePage(i); }),
+      btn("Close", closeViewer)),
+    el("div", { className: "scroll" }, el("img", { src: p.small.toDataURL("image/jpeg", 0.85), alt: `Page ${i + 1}` })));
+  document.body.append(v);
+}
+function closeViewer() { $("viewer")?.remove(); }
+addEventListener("keydown", e => { if (e.key === "Escape") closeViewer(); });
+
 function removePage(i) {
   pages.splice(i, 1);
   pages.forEach((p, n) => (p.local || []).forEach(b => { b.page = n + 1; }));
@@ -536,23 +571,30 @@ function removePage(i) {
   else setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.`);
 }
 
+// Photos picked from cloud galleries (Google Photos) often arrive with no MIME
+// type, so try every file except obvious non-images, and say which failed.
+// One canvas per page, at the size that's sent and kept: legible to check by
+// eye, and light enough for a dozen pages in a phone's memory.
 async function addFiles(fileList) {
-  const files = [...fileList].filter(f => f.type.startsWith("image/"));
+  const files = [...fileList].filter(f => !f.type || f.type.startsWith("image/"));
   if (!files.length) return;
   $("scanBtn").disabled = $("clearBtn").disabled = true;
+  const failed = [];
   for (const [n, f] of files.entries()) {
     setStatus(files.length > 1 ? `Adding photo ${n + 1} of ${files.length}…` : "Adding photo…", "busy");
     try {
-      const full = await toCanvas(f, 2000);   // legible to check by eye when zoomed; no need for print quality
       const small = await toCanvas(f, MAX_EDGE);
-      pages.push({ full, small });
+      pages.push({ full: small, small });
       renderPages();
       $("scanBtn").disabled = $("clearBtn").disabled = true;
-    } catch (err) { setStatus("Couldn't read that image: " + err.message, "error"); }
+    } catch { failed.push(f.name || `photo ${n + 1}`); }
   }
   $("scanBtn").disabled = $("clearBtn").disabled = pages.length === 0;
   $("deviceCheck").hidden = true;
-  if (pages.length) setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.`);
+  const ready = pages.length ? `${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.` : "";
+  if (failed.length) setStatus(`Couldn't open ${failed.length} of ${files.length} photo${files.length > 1 ? "s" : ""}` +
+    ` (${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}). If they're in Google Photos, download them to the phone first. ${ready}`, "error");
+  else if (ready) setStatus(ready);
 }
 
 // capture="environment" only opens the camera on phones; desktop browsers
@@ -653,12 +695,28 @@ const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d
 
 // Personal-data boxes from Tesseract's lines, in the image's pixel space.
 // Over-boxing is the safe failure: the owner uncovers anything that's fine.
+// The garage's own details (name, address, phone, website) are fine to send,
+// and Claude needs them. Anything near words like these starts uncovered.
+const BUSINESS = /\b(ltd|limited|plc|llp|motors?|motor services|garage|autos?|automotive|tyres?|services|centre|center|engineering|repairs?|mot testing|vat\s*(no|reg)|reg(istered)?\s*(no|office)|company\s*(no|reg))\b|www\.|https?:/i;
+
 function findPersonalData(data, page) {
+  // Tesseract joins words across columns (a receipt lying on an invoice, a
+  // header with text on both sides), so split each line wherever there's a
+  // wide gap and treat the pieces as separate lines.
   const lines = [];
   for (const b of data.blocks || []) for (const para of b.paragraphs) for (const l of para.lines) {
-    let text = "", spans = [];
-    for (const w of l.words) { text += (text ? " " : "") + w.text; spans.push({ w, start: text.length - w.text.length, end: text.length }); }
-    lines.push({ text, spans, bbox: l.bbox });
+    const gap = 1.8 * (l.bbox.y1 - l.bbox.y0);
+    let seg = [];
+    const flush = () => {
+      if (!seg.length) return;
+      let text = "", spans = [];
+      for (const w of seg) { text += (text ? " " : "") + w.text; spans.push({ w, start: text.length - w.text.length, end: text.length }); }
+      const ws = seg.map(w => w.bbox);
+      lines.push({ text, spans, bbox: { x0: Math.min(...ws.map(r => r.x0)), y0: Math.min(...ws.map(r => r.y0)), x1: Math.max(...ws.map(r => r.x1)), y1: Math.max(...ws.map(r => r.y1)) } });
+      seg = [];
+    };
+    for (const w of l.words) { if (seg.length && w.bbox.x0 - seg[seg.length - 1].bbox.x1 > gap) flush(); seg.push(w); }
+    flush();
   }
   // Geometry, not Tesseract's paragraphs (which split address blocks apart):
   // the lines stacked directly above, and the line directly below.
@@ -667,30 +725,42 @@ function findPersonalData(data, page) {
     && Math.abs(o.bbox.x0 - l.bbox.x0) < 2 * lh(l)).sort((a, b) => b.bbox.y1 - a.bbox.y1)[0];
   const below = l => lines.filter(o => o !== l && o.bbox.y0 >= l.bbox.y1 - 0.3 * lh(l) && o.bbox.y0 - l.bbox.y1 < 1.5 * lh(l)
     && o.bbox.x0 < l.bbox.x1 && o.bbox.x1 > l.bbox.x0).sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
+  // Does this line, or the one just above or below it, read like a business?
+  const businessy = l => [l, above(l), below(l)].some(o => o && BUSINESS.test(o.text));
   const boxes = [];
-  const add = (bbox, category, text) => boxes.push({ page, category, text, x0: bbox.x0, y0: bbox.y0, x1: bbox.x1, y1: bbox.y1, source: "device", on: true });
+  const add = (bbox, category, text, business = false) => boxes.push({ page, category, text, x0: bbox.x0, y0: bbox.y0, x1: bbox.x1, y1: bbox.y1, source: "device", on: !business, business });
   const union = ws => ({ x0: Math.min(...ws.map(w => w.bbox.x0)), y0: Math.min(...ws.map(w => w.bbox.y0)), x1: Math.max(...ws.map(w => w.bbox.x1)), y1: Math.max(...ws.map(w => w.bbox.y1)) });
-  const boxMatch = (line, re, category, ok = () => true) => {
+  const boxMatch = (line, re, category, ok = () => true, business = false) => {
     for (const m of line.text.matchAll(re)) {
       if (!ok(m[0], line)) continue;
       const ws = line.spans.filter(s => s.end > m.index && s.start < m.index + m[0].length).map(s => s.w);
-      if (ws.length) add(union(ws), category, m[0]);
+      if (ws.length) add(union(ws), category, m[0], business);
     }
   };
   const digitsOf = t => t.replace(/\D/g, "");
   for (const line of lines) {
     const t = line.text;
-    boxMatch(line, /[\w.+-]+@[\w-]+(?:\s?\.\s?[\w-]+)+/g, "email");   // OCR often adds a space after a dot
-    boxMatch(line, /(?<![\d+])(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d(?!\d)/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; });
+    const biz = businessy(line);
+    boxMatch(line, /[\w.+-]+@[\w-]+(?:\s?\.\s?[\w-]+)+/g, "email", undefined, biz || /@[^@\s]*(motor|garage|auto|tyre|service)/i.test(t));   // OCR often adds a space after a dot
+    boxMatch(line, /(?<![\d+])(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d(?!\d)/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; }, biz);
     boxMatch(line, /\b(?:\d[ -]?){13,19}\b/g, "account_or_card_number", m => luhn(digitsOf(m)));
     boxMatch(line, /(?:\*{2,}|[xX]{3,})[\s-]?\d{4}\b/g, "account_or_card_number");
+    // Masked card numbers OCR badly ("****0411" reads as "Hsme0411"), so on a
+    // labelled line cover whatever follows the label, however it was read.
+    const cardLab = t.match(/\b(card\s*(no|number|num)|pan(\s*seq)?|aid|account\s*(no|number)|acc(oun)?t\s*no|sort\s*code)\b\s*[:;.]?/i);
+    if (cardLab) {
+      const after = line.spans.filter(s => s.start >= cardLab.index + cardLab[0].length).map(s => s.w).slice(0, 4);
+      if (after.length) add(union(after), "account_or_card_number", after.map(w => w.text).join(" "));
+    }
     if (/sort|account|acct|a\/c/i.test(t)) boxMatch(line, /\b\d{2}-\d{2}-\d{2}\b|\b\d{8}\b/g, "account_or_card_number");
     if (!/serial|s\/n|part|invoice|order|vts|batch/i.test(t)) boxMatch(line, /(?<!\d)(?:\d{4}\s?\d{3}\s?\d{4}|\d{11})(?!\d)/g, "v5c_document_reference", m => !/^0/.test(m));
     boxMatch(line, /\b(?:Mr|Mrs|Ms|Miss|Mx|Dr)\.?\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3}/g, "person_name");
     // A postcode: box its line and the address lines stacked above it.
     if (/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i.test(t)) {
-      add(line.bbox, "address", t);
-      for (let up = above(line), n = 0; up && n < 3 && !NOT_ADDRESS.test(up.text); up = above(up), n++) add(up.bbox, "address", up.text);
+      const block = [line];
+      for (let up = above(line), n = 0; up && n < 3 && !NOT_ADDRESS.test(up.text); up = above(up), n++) block.push(up);
+      const business = block.some(businessy);   // the garage's address, not the owner's
+      for (const l of block) add(l.bbox, "address", l.text, business);
     }
     // "Customer: Jane Smith": box what follows the label, or the line below if nothing does.
     const isSignature = /\b(signature|signed|sign here)\b/i.test(t);
@@ -757,7 +827,7 @@ $("scanBtn").onclick = async () => {
     for (const [i, p] of pages.entries()) {
       ocrProgress = m => { if (m.status === "recognizing text") setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy"); };
       const { data, rot } = await recognizeUpright(worker, p.small);
-      if (rot) { p.small = rotated(p.small, rot); p.full = rotated(p.full, rot); turned = true; }
+      if (rot) { p.small = p.full = rotated(p.small, rot); turned = true; }
       p.local = findPersonalData(data, i + 1);
       p.ocrText = data.text || "";
       p.textPx = smallPrintPx(data);
@@ -883,12 +953,16 @@ function paintCheck(c, p, draft) {
 function checkSummary() {
   const all = pages.flatMap(p => p.local);
   const on = all.filter(b => b.on).length;
+  const bizOff = all.filter(b => b.business && !b.on).length;
   const found = all.filter(b => b.source === "device").length;
   $("checkLead").textContent = found
     ? "Your phone found these personal details and will black them out before the pages leave it."
     : "Your phone didn't find any personal details on " + (pages.length > 1 ? "these pages." : "this page.");
+  const leftOpen = bizOff ? ` ${bizOff} dashed box${bizOff === 1 ? " looks" : "es look"} like the garage's own details, so ${bizOff === 1 ? "it's" : "they're"} left uncovered for AI to read; tap to cover.` : "";
+  const youOff = all.length - on - bizOff;
   $("checkSummary").textContent = on
-    ? `${on} area${on === 1 ? "" : "s"} will be blacked out${all.length > on ? `, ${all.length - on} uncovered by you` : ""}. Faint boxes turn solid black when sent.`
+    ? `${on} area${on === 1 ? "" : "s"} will be blacked out${youOff > 0 ? `, ${youOff} uncovered by you` : ""}. Faint boxes turn solid black when sent.${leftOpen}`
+    : found && youOff <= 0 ? `No personal details found, only the garage's own.${leftOpen} If you can see anything personal, tap Draw a box and cover it.`
     : found ? "Nothing will be blacked out: you've uncovered everything your phone found."
     : "No personal details found, so nothing needs blacking out. If you can see any, tap Draw a box and cover them.";
   $("sendBtn").textContent = on ? "Send blacked-out pages" : "Send pages";
@@ -1183,6 +1257,8 @@ const saved = loadHistory();
 let persistAsked = false;
 function saveHistory() {
   store.set(HISTORY_KEY, JSON.stringify(saved));
+  store.set("porter.changedAt", new Date().toISOString());
+  showBackupNudge();
   // Ask the browser not to evict our storage under pressure (Chrome grants it
   // quietly for sites in use; Safari decides for itself).
   if (!persistAsked) { persistAsked = true; navigator.storage?.persist?.().catch(() => {}); }
@@ -1225,9 +1301,13 @@ function renderHistory() {
   }));
   $("historyEmpty").hidden = visits.length > 0;
   const keep = $("adviceVisit").value || lastVisitId;
-  $("adviceVisit").replaceChildren(el("option", { value: "" }, "Not linked (dated today)"),
+  $("adviceVisit").replaceChildren(el("option", { value: "" }, visits.length ? "Another visit (enter the date)" : "No saved visits yet"),
     ...visits.map(v => el("option", { value: v.id }, visitLabel(v))));
   $("adviceVisit").value = visits.some(v => v.id === keep) ? keep : "";
+  $("noVisits").hidden = visits.length > 0;
+  $("adviceVisit").hidden = !visits.length;
+  $("adviceVisit").previousElementSibling.hidden = !visits.length;
+  showVisitManual();
   $("sellBtn").disabled = !visits.length;
   $("keepBtn").disabled = !visits.some(v => v.id === lastVisitId && !v.keptPages);
   $("sellHint").textContent = visits.length ? `Uses ${visits.length} saved document${visits.length === 1 ? "" : "s"} and ${saved.notes.length} advice note${saved.notes.length === 1 ? "" : "s"}.` : "Add a document or import your MOT history first.";
@@ -1248,6 +1328,12 @@ const ADVICE_SYSTEM = "You turn what a mechanic told a car owner out loud into a
 
 const todayIso = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const currentVisit = () => saved.visits.find(v => v.id === $("adviceVisit").value) || null;
+// Advice not from a saved visit: the owner says when (default today) and, if they like, where.
+function showVisitManual() {
+  $("visitManual").hidden = !!currentVisit();
+  if (!$("visitDate").value) $("visitDate").value = todayIso();
+}
+$("adviceVisit").addEventListener("change", showVisitManual);
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
@@ -1284,10 +1370,11 @@ $("adviceBtn").onclick = async () => {
   if (!cred || !text) return;
   const model = $("model").value;
   const visit = currentVisit();
-  const ref = visit?.date || todayIso();
+  const ref = visit?.date || $("visitDate").value || todayIso();
+  const garage = visit?.garage_name || (!visit && $("visitGarage").value.trim()) || "";
   const context = [
     `Reference date: ${ref}`,
-    visit ? `Visit: ${visit.garage_name || "unknown garage"}, mileage ${visit.mileage ?? "unknown"}` : "Not linked to a visit; current mileage unknown.",
+    visit ? `Visit: ${visit.garage_name || "unknown garage"}, mileage ${visit.mileage ?? "unknown"}` : `Visit: ${garage || "unknown garage"}; current mileage unknown.`,
     visit?.advisories.length ? "Advisories printed on the document: " + visit.advisories.join("; ") : "",
     `What the mechanic said, in the owner's words:\n"""${text}"""`,
   ].filter(Boolean).join("\n");
@@ -1307,7 +1394,7 @@ $("adviceBtn").onclick = async () => {
       return;
     }
     parsed.actions.forEach(a => { a.include = !!a.due_date; });
-    saved.notes.push({ id: newId(), visitId: visit?.id || "", garage: visit?.garage_name || "", ref, text, parsed });
+    saved.notes.push({ id: newId(), visitId: visit?.id || "", garage, ref, text, parsed });
     saveHistory(); renderHistory();
     $("adviceText").value = "";
     const dated = parsed.actions.filter(a => a.due_date).length;
@@ -1324,7 +1411,7 @@ function renderNotes() {
 
 function noteBlock(n) {
   const p = n.parsed;
-  const where = n.visitId ? `${n.garage || "Scanned visit"} · ${n.ref}` : `Not linked to a visit · ${n.ref}`;
+  const where = `${n.garage || (n.visitId ? "Scanned visit" : "Visit")} · ${n.ref}`;
   const rows = p.actions.map(a => {
     const tick = el("input", { type: "checkbox", checked: !!a.include, ariaLabel: "Add to calendar" });
     const what = el("input", { type: "text", value: a.action, ariaLabel: "Reminder" });
@@ -1596,11 +1683,38 @@ $("backupBtn").onclick = async () => {
     if (kept) pagesOut[v.id] = await Promise.all(kept.map(async p => ({ data: await blobToDataUrl(p.blob) })));
   }
   const backup = { app: "porter-demo", version: 1, exportedAt: new Date().toISOString(), history: saved, pages: pagesOut };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: "application/json" }));
-  el("a", { href: url, download: `porter-backup-${todayIso()}.json` }).click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const file = new File([JSON.stringify(backup)], `porter-backup-${todayIso()}.json`, { type: "application/json" });
+  // On phones, the share sheet sends it straight to email, Drive or a chat;
+  // elsewhere (or if sharing is cancelled or unavailable) it downloads.
+  let shared = false;
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "Porter backup", text: `Porter backup, ${todayIso()}. Keep this file: Restore in Porter brings your car's history back.` }); shared = true; }
+    catch (err) { if (err.name === "AbortError") return; }
+  }
+  if (!shared) {
+    const url = URL.createObjectURL(file);
+    el("a", { href: url, download: file.name }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  store.set("porter.lastBackup", new Date().toISOString());
+  showBackupNudge();
   setStatus(`Backed up ${saved.visits.length} document${saved.visits.length === 1 ? "" : "s"} and ${saved.notes.length} note${saved.notes.length === 1 ? "" : "s"}.`, "", $("historyStatus"));
 };
+// Everything lives on this phone, so remind people to keep a copy elsewhere:
+// shown once there's history, highlighted after new records or a week.
+function showBackupNudge() {
+  const out = $("backupNudge");
+  const has = saved.visits.length + saved.notes.length > 0;
+  out.hidden = !has;
+  if (!has) return;
+  const last = store.get("porter.lastBackup"), changed = store.get("porter.changedAt");
+  const days = last ? Math.floor((Date.now() - Date.parse(last)) / 86400000) : null;
+  const stale = !last || days >= 7 || (changed && changed > last);
+  out.className = "small" + (stale ? " note" : " muted");
+  out.textContent = !last ? "Not backed up yet. Your history is only on this phone: tap Back up and email it to yourself or save it to Drive."
+    : stale ? `Last backed up ${days === 0 ? "today" : days === 1 ? "yesterday" : days + " days ago"}${changed && changed > last ? ", and there's new history since" : ""}. Tap Back up to keep a copy.`
+    : `Last backed up ${days === 0 ? "today" : days === 1 ? "yesterday" : days + " days ago"}.`;
+}
 $("restoreBtn").onclick = () => $("restoreFile").click();
 $("restoreFile").onchange = async e => {
   const file = e.target.files[0];
@@ -1724,6 +1838,7 @@ $("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $
 
 showMode();
 showConnect();
+showBackupNudge();
 checkInvite();
 if (mode === "key" && store.get("porter.key") && !connected()) verifyKey(store.get("porter.key"));
 renderHistory();
