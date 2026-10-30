@@ -760,6 +760,7 @@ $("scanBtn").onclick = async () => {
       if (rot) { p.small = rotated(p.small, rot); p.full = rotated(p.full, rot); turned = true; }
       p.local = findPersonalData(data, i + 1);
       p.ocrText = data.text || "";
+      p.textPx = smallPrintPx(data);
     }
   } catch (err) {
     ocrFailed = err;
@@ -925,6 +926,29 @@ function showDeviceCheck() {
   $("deviceCheck").hidden = false;
 }
 
+// Send each page at the smallest size that keeps its smallest print readable.
+// Image tokens grow with pixels (about width x height / 750), so a receipt
+// with big print needn't go at the same size as a dense MOT sheet. The OCR
+// already measured the text: shrink until the small print is about
+// READABLE_PX tall, within [MIN_SEND_EDGE, MAX_EDGE]. Without OCR, send as is.
+const READABLE_PX = 18, MIN_SEND_EDGE = 1000, JPEG_QUALITY = 0.8;
+function smallPrintPx(data) {
+  const hs = (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines))
+    .filter(l => l.confidence > 30 && /[A-Za-z0-9]{2,}/.test(l.text))   // a low bar: fine print is often read poorly
+    .map(l => l.bbox.y1 - l.bbox.y0).sort((a, b) => a - b);
+  return hs.length >= 3 ? hs[Math.floor(hs.length * 0.1)] : null;   // 10th percentile: the fine print, not the odd speck
+}
+function forSending(p) {
+  const src = blackedOut(p), edge = Math.max(src.width, src.height);
+  const scale = p.textPx ? Math.min(1, Math.max(READABLE_PX / p.textPx, MIN_SEND_EDGE / edge)) : 1;
+  if (scale >= 0.97) return { canvas: src, scale: 1 };
+  const c = el("canvas", { width: Math.round(src.width * scale), height: Math.round(src.height * scale) });
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return { canvas: c, scale: c.width / src.width };
+}
+
 // Step 3: only the blacked-out pages leave the phone.
 function blackedOut(p) {
   const c = el("canvas", { width: p.small.width, height: p.small.height });
@@ -943,10 +967,14 @@ $("sendBtn").onclick = async () => {
   setDrawing(false);
   const model = $("model").value;
   const content = [];
-  pages.forEach((p, i) => {
-    content.push({ type: "text", text: `Page ${i + 1} (${p.small.width}x${p.small.height} pixels):` });
-    content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg",
-      data: blackedOut(p).toDataURL("image/jpeg", 0.9).split(",")[1] } });
+  let sentBytes = 0;
+  const scales = pages.map((p, i) => {
+    const { canvas, scale } = forSending(p);
+    const data = canvas.toDataURL("image/jpeg", JPEG_QUALITY).split(",")[1];
+    sentBytes += data.length * 3 / 4;
+    content.push({ type: "text", text: `Page ${i + 1} (${canvas.width}x${canvas.height} pixels):` });
+    content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } });
+    return scale;
   });
   content.push({ type: "text", text: "Extract the fields and personal-data boxes." });
   const body = {
@@ -961,6 +989,11 @@ $("sendBtn").onclick = async () => {
     const msg = await callClaude(cred, body);
     const text = msg.content.find(b => b.type === "text")?.text;
     result = JSON.parse(text);
+    // Boxes come back in the sent image's pixels; put them back on the page.
+    for (const b of [...result.pii, ...result.unboxed_numbers]) {
+      const k = 1 / (scales[b.page - 1] || 1);
+      b.x0 = Math.round(b.x0 * k); b.y0 = Math.round(b.y0 * k); b.x1 = Math.round(b.x1 * k); b.y1 = Math.round(b.y1 * k);
+    }
     if (result.content_flag && result.content_flag !== "none") {
       const reason = result.content_flag_reason || "it doesn't look like vehicle paperwork";
       result = null;
@@ -973,7 +1006,7 @@ $("sendBtn").onclick = async () => {
     result.pii.unshift(...pages.flatMap(p => p.local.filter(b => b.on).map(({ on, ...b }) => b)));
     const added = crossCheck(result);
     const usd = costUsd(msg, model);
-    $("usage").textContent = `${msg.model} · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
+    $("usage").textContent = `${msg.model} · sent ${Math.round(sentBytes / 1024)} KB of images · ${msg.usage.input_tokens.toLocaleString()} in / ${msg.usage.output_tokens.toLocaleString()} out tokens · ~$${usd.toFixed(4)}`;
     $("deviceCheck").hidden = true;
     render();
     const askFirst = result.vehicle_related === false && !confirmedForCar;
