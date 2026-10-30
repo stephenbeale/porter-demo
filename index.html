@@ -65,9 +65,11 @@ input[type=file] { display: none; }
 .ask-thumb .numbered { flex: none; width: 72px; margin: 0; }
 .ask-thumb img { width: 72px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
 .ask-thumb .corner-num { right: 2px; top: 2px; font-size: 12px; min-width: 20px; padding: 1px 5px; }
-#thumbNav { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-#thumbNav input { flex: 1; accent-color: var(--accent); }
-#thumbNav span { white-space: nowrap; }
+.thumbnav { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.thumbnav input { flex: 1; accent-color: var(--accent); }
+.thumbnav span { white-space: nowrap; }
+.strip-label { margin: 12px 0 0; }
+.strip .thumbs { margin-top: 6px; }
 #thumbs.busy .thumb button { display: none; }
 .thumb button { position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
   background: rgba(0,0,0,.65); color: #fff; font-size: 14px; line-height: 28px; padding: 0; cursor: pointer; }
@@ -100,7 +102,8 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 #checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
 .ask { border: 2px solid var(--warn); border-radius: 12px; padding: 12px; margin: 0 0 12px; }
 .navtabs { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 10px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0; }
-.navtab { flex: 1 0 auto; padding: 9px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
+.navtab { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.15; padding: 7px 4px; border-radius: 14px; border: 1px solid var(--rule); background: var(--card); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+.navtab .ico { font-size: 20px; line-height: 1.1; }
 .navtab[aria-current=page] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 section[data-tab].off-tab { display: none !important; }
 details > summary { font-weight: 600; }
@@ -156,13 +159,13 @@ details > summary { font-weight: 600; }
     <span>Porter <span class="muted small">demo</span></span>
     <a href="#" id="settingsLink" class="small" style="font-weight:500" hidden>⚙ Key &amp; model</a>
   </h1>
-  <p class="muted small">Scan a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
+  <p class="muted small">Add a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
 
   <nav class="navtabs" id="mainTabs" aria-label="Sections">
-    <button class="navtab" type="button" data-tab="scan" aria-current="page">Scan</button>
-    <button class="navtab" type="button" data-tab="notes">Mechanic's notes</button>
-    <button class="navtab" type="button" data-tab="history">History</button>
-    <button class="navtab" type="button" data-tab="sell">Sell</button>
+    <button class="navtab" type="button" data-tab="scan" aria-current="page"><span class="ico" aria-hidden="true">➕</span>Add</button>
+    <button class="navtab" type="button" data-tab="notes"><span class="ico" aria-hidden="true">🔧</span>Mechanic</button>
+    <button class="navtab" type="button" data-tab="history"><span class="ico" aria-hidden="true">✍️</span>History</button>
+    <button class="navtab" type="button" data-tab="sell"><span class="ico" aria-hidden="true">🤝</span>Sell</button>
   </nav>
 
   <section class="card" id="installTip" hidden>
@@ -194,6 +197,12 @@ details > summary { font-weight: 600; }
       <option value="claude-opus-5-5">Opus 5.5: most accurate, ~4-7¢ per document</option>
       <option value="claude-haiku-5-5">Haiku 5.5: cheapest, ~0.1¢ per page</option>
     </select>
+    <label for="receiptPref">Card payment receipts</label>
+    <select id="receiptPref">
+      <option value="ask">Ask me each time</option>
+      <option value="keep">Always keep them (they show what was paid)</option>
+      <option value="drop">Always leave them out</option>
+    </select>
   </section>
 
   <section class="card" id="addCard" data-tab="scan">
@@ -211,10 +220,17 @@ details > summary { font-weight: 600; }
         <button class="btn secondary" id="closeCamBtn" type="button">Close camera</button>
       </div>
     </div>
-    <div class="thumbs" id="thumbs"></div>
-    <div id="thumbNav" hidden>
-      <input id="thumbSlider" type="range" min="0" max="1000" value="0" aria-label="Scroll through pages">
-      <span class="small muted" id="thumbPos"></span>
+    <div id="thumbs">
+      <div class="strip" id="doneStrip" hidden>
+        <p class="strip-label small"><b>Processed</b> <span class="muted" id="doneCount"></span></p>
+        <div class="thumbs" id="doneRow"></div>
+        <div class="thumbnav" hidden><input type="range" min="0" max="1000" value="0" aria-label="Scroll through processed pages"><span class="small muted"></span></div>
+      </div>
+      <div class="strip" id="nextStrip" hidden>
+        <p class="strip-label small"><b>Next up</b> <span class="muted" id="nextCount"></span></p>
+        <div class="thumbs" id="nextRow"></div>
+        <div class="thumbnav" hidden><input type="range" min="0" max="1000" value="0" aria-label="Scroll through pages still to process"><span class="small muted"></span></div>
+      </div>
     </div>
     <p class="muted small" id="thumbHint" hidden>Tap a page to see it full size.</p>
     <div class="row" style="margin-top:12px">
@@ -231,7 +247,8 @@ details > summary { font-weight: 600; }
       <div class="row"><button class="btn secondary" id="removeBlocked" type="button">Remove that page</button></div>
     </div>
     <div class="ask" id="notCarAsk" hidden>
-      <div class="ask-thumb"><div id="notCarThumb"></div><p style="margin:0 0 10px"><b id="notCarText"></b> Are you sure you want to upload it here?</p></div>
+      <div class="ask-thumb"><div id="notCarThumb"></div><p style="margin:0 0 10px"><b id="notCarText"></b> <span id="notCarQ">Are you sure you want to upload it here?</span></p></div>
+      <label class="check small" id="notCarRememberRow" hidden><input type="checkbox" id="notCarRemember"> Remember this for card receipts</label>
       <div class="row">
         <button class="btn secondary" id="notCarYes" type="button">Yes, keep it</button>
         <button class="btn secondary" id="notCarNo" type="button">No, remove it</button>
@@ -399,7 +416,7 @@ details > summary { font-weight: 600; }
 
 <script>
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason"], "additionalProperties": false};
-const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given belong to ONE document. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set it if the image shows a\nperson or part of one (shows_person), or is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
+const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given belong to ONE document. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
 const MAX_EDGE = 1568;
 const PRICES = { "claude-opus-5-5": [4, 20], "claude-haiku-5-5": [0.10, 0.50] };
@@ -594,69 +611,96 @@ function costUsd(msg, model) {
 const failHint = err => /authentication|x-api-key|invalid.*key/i.test(err.message) ? " Check your API key." : "";
 
 async function toCanvas(file, maxEdge) {
+  // Phone photos can be 50 megapixels: decoding one at full size takes ~200 MB,
+  // which a phone busy reading other pages may refuse. So decode at a reduced
+  // size first, then full size, then through an <img>, retrying once.
   // createImageBitmap honours EXIF orientation, so phone photos come out upright.
-  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = maxEdge ? Math.min(1, maxEdge / Math.max(bmp.width, bmp.height)) : 1;
+  const tries = [
+    () => createImageBitmap(file, { imageOrientation: "from-image", resizeWidth: Math.round(maxEdge * 1.4), resizeQuality: "high" }),
+    () => createImageBitmap(file, { imageOrientation: "from-image" }),
+    async () => {
+      const url = URL.createObjectURL(file), img = new Image();
+      try { img.src = url; await img.decode(); return img; } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    },
+  ];
+  if (file.size < 3e6) tries.shift();   // small enough to decode as it is, without scaling up
+  let bmp, lastErr;
+  for (const attempt of [...tries, ...tries]) {
+    try { bmp = await attempt(); break; } catch (err) { lastErr = err; await new Promise(r => setTimeout(r, 150)); }
+  }
+  if (!bmp) throw lastErr;
+  const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
+  const scale = maxEdge ? Math.min(1, maxEdge / Math.max(w, h)) : 1;
   const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.width = Math.round(w * scale); c.height = Math.round(h * scale);
   c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
   bmp.close?.();
   return c;
 }
 
-// Thumbnails, each with its own remove button; Process/Remove only show once
-// there's a page to act on.
+// Thumbnails, each with its own remove button, in two rows: pages already
+// processed on the phone, and the ones still to do ("Next up"). The page being
+// worked on is always first in Next up, so nothing needs to scroll on its own
+// and each row stays wherever the owner slid it. Process/Remove only show
+// once there's a page to act on.
+const thumbUrls = new WeakMap();
+const thumbUrl = c => thumbUrls.get(c) || (thumbUrls.set(c, c.toDataURL("image/jpeg", 0.6)), thumbUrls.get(c));
+const thumbAt = i => $("thumbs").querySelector(`.thumb[data-i="${i}"]`);
 function renderPages() {
-  $("thumbs").replaceChildren(...pages.map((p, i) => {
-    const x = el("button", { type: "button", ariaLabel: `Remove page ${i + 1}` }, "✕");
+  const tile = (p, i) => {
+    const x = el("button", { type: "button", ariaLabel: `Remove upload ${i + 1}` }, "✕");
     x.onclick = () => removePage(i);
-    const img = el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Upload ${i + 1}` });
+    const img = el("img", { src: thumbUrl(p.small), alt: `Upload ${i + 1}` });
     img.onclick = () => openViewer(i);
     const state = el("div", { className: "state" + (p.badge ? " " + p.badge.state : ""), ariaHidden: "true" }, p.badge?.text || "");
     state.hidden = !p.badge;
-    return el("div", { className: "thumb" }, img, state, x, el("span", { className: "num" }, String(i + 1)));
-  }));
+    const t = el("div", { className: "thumb" }, img, state, x, el("span", { className: "num" }, String(i + 1)));
+    t.dataset.i = i;
+    return t;
+  };
+  const done = pages.map((p, i) => [p, i]).filter(([p]) => p.prepared), next = pages.map((p, i) => [p, i]).filter(([p]) => !p.prepared);
+  $("doneRow").replaceChildren(...done.map(([p, i]) => tile(p, i)));
+  $("nextRow").replaceChildren(...next.map(([p, i]) => tile(p, i)));
+  $("doneStrip").hidden = !done.length; $("nextStrip").hidden = !next.length;
+  $("doneCount").textContent = done.length ? `(${done.length})` : "";
+  $("nextCount").textContent = next.length ? `(${next.length})` : "";
   $("thumbHint").hidden = !pages.length;
   requestAnimationFrame(updateThumbNav);
   $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
   setRemoveLabel();
 }
 // Progress shown on the pages themselves while they're checked: waiting
-// (dimmed), busy ("Reading 45%"), done (a tick). Kept on the page object so
-// a re-render (after a page is turned upright) keeps it.
+// (dimmed), busy ("Processing 45%"), done (a tick). Kept on the page object
+// so a re-render keeps it.
 function markThumb(i, state, text = "") {
   const p = pages[i];
   if (!p) return;
   p.badge = state ? { state, text } : null;
-  const t = $("thumbs").children[i], o = t?.querySelector(".state");
+  const o = thumbAt(i)?.querySelector(".state");
   if (!o) return;
   o.className = "state" + (state ? " " + state : ""); o.textContent = text; o.hidden = !state;
-  if (state === "busy" && processing && Date.now() - stripTouched > 8000) t.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
 }
-// The strip only follows along on its own if the owner hasn't been sliding
-// through it in the last few seconds.
-let stripTouched = 0;
-for (const [id, ev] of [["thumbs", "pointerdown"], ["thumbs", "touchstart"], ["thumbs", "wheel"], ["thumbSlider", "input"], ["thumbSlider", "pointerdown"]])
-  $(id).addEventListener(ev, () => { stripTouched = Date.now(); }, { passive: true });
 
-// With more pages than fit, a slider shows where you are in the strip and
-// scrolls it ("Pages 4-6 of 13").
+// With more pages than fit in a row, a slider under it shows where you are
+// and scrolls it ("Uploads 4-6 of 13").
 function updateThumbNav() {
-  const strip = $("thumbs"), max = strip.scrollWidth - strip.clientWidth;
-  $("thumbNav").hidden = max <= 4;
-  if (max <= 4) return;
-  $("thumbSlider").value = Math.round(strip.scrollLeft / max * 1000);
-  const r = strip.getBoundingClientRect();
-  const seen = [...strip.children].map((t, i) => [t.getBoundingClientRect(), i + 1])
-    .filter(([b]) => b.right > r.left + 8 && b.left < r.right - 8).map(([, n]) => n);
-  $("thumbPos").textContent = seen.length ? `Pages ${seen[0]}${seen.length > 1 ? "–" + seen[seen.length - 1] : ""} of ${pages.length}` : "";
+  for (const row of [$("doneRow"), $("nextRow")]) {
+    const nav = row.nextElementSibling, max = row.scrollWidth - row.clientWidth;
+    nav.hidden = max <= 4;
+    if (max <= 4) continue;
+    nav.querySelector("input").value = Math.round(row.scrollLeft / max * 1000);
+    const r = row.getBoundingClientRect();
+    const seen = [...row.children].filter(t => { const b = t.getBoundingClientRect(); return b.right > r.left + 8 && b.left < r.right - 8; }).map(t => +t.dataset.i + 1);
+    nav.querySelector("span").textContent = seen.length ? `Uploads ${seen[0]}${seen.length > 1 ? "–" + seen[seen.length - 1] : ""} (${row.children.length} here)` : "";
+  }
 }
-$("thumbs").addEventListener("scroll", updateThumbNav, { passive: true });
+for (const row of [$("doneRow"), $("nextRow")]) {
+  row.addEventListener("scroll", updateThumbNav, { passive: true });
+  row.nextElementSibling.querySelector("input").addEventListener("input", e => {
+    row.scrollLeft = e.target.value / 1000 * (row.scrollWidth - row.clientWidth);
+  });
+}
 addEventListener("resize", updateThumbNav);
-$("thumbSlider").addEventListener("input", e => {
-  const strip = $("thumbs");
-  strip.scrollLeft = e.target.value / 1000 * (strip.scrollWidth - strip.clientWidth);
-});
 
 // Every image carries its upload number in the top-right corner.
 const numbered = (node, n) => el("div", { className: "numbered" }, node, el("span", { className: "corner-num", ariaHidden: "true" }, String(n)));
@@ -714,7 +758,7 @@ async function addFiles(fileList) {
   $("deviceCheck").hidden = true;
   const ready = pages.length ? `${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.` : "";
   if (failed.length) setStatus(`Couldn't open ${failed.length} of ${files.length} photo${files.length > 1 ? "s" : ""}` +
-    ` (${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}). If they're in Google Photos, download them to the phone first. ${ready}`, "error");
+    ` (${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}). If they’re in Google Photos, download them to the phone first; otherwise try adding fewer at a time. ${ready}`, "error");
   else if (ready) setStatus(ready);
   queuePrepare(pages.slice(before));
 }
@@ -861,7 +905,7 @@ function prepMark(p, text, done) {
   if (processing && !done) setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}${text.match(/\d+%/) ? ` (${text.match(/\d+%/)[0]})` : "…"}`, "busy");
 }
 async function turnThumb(p, rot) {
-  const img = $("thumbs").children[pages.indexOf(p)]?.querySelector("img");
+  const img = thumbAt(pages.indexOf(p))?.querySelector("img");
   if (img && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const k = rot === 180 ? 1 : Math.min(1, img.clientHeight / Math.max(1, img.clientWidth));
     img.style.transition = "transform .6s ease";
@@ -917,6 +961,7 @@ async function readPage(p, gen, people) {
   if (stale()) return;
   p.prepared = true;
   prepMark(p, "", true);
+  renderPages();
 }
 function queuePrepare(added) {
   const gen = prepGen, todo = added.filter(p => !p.prepared);
@@ -1166,12 +1211,29 @@ function afterChecks() {
       (blocked.length === 1 ? "it" : "they") + " won't be sent.";
     $("removeBlocked").textContent = pages.length === blocked.length ? "Remove and start again" : `Remove ${blocked.length === 1 ? "that upload" : "those uploads"}`;
   }
+  // Card receipts follow the owner's standing choice, if they've made one.
+  const receiptPref = store.get("porter.receipts") || "ask";
+  const isReceipt = p => !p.keep && !p.unchecked && notCarKind(p.ocrText || "") === RECEIPT;
+  if (receiptPref === "keep") pages.forEach(p => { if (isReceipt(p)) p.keep = true; });
+  if (receiptPref === "drop" && !blocked.length && pages.some(isReceipt)) {
+    const left = pages.map((p, i) => isReceipt(p) && i + 1).filter(Boolean);
+    removePages(isReceipt);
+    if (pages.length) setStatus(`Left out upload${left.length > 1 ? "s" : ""} ${left.join(", ")} (card receipt${left.length > 1 ? "s" : ""}), as you asked. You can change this under ⚙ Key & model.`, "", $("checkStatus"));
+    else setStatus("That was a card receipt, so it was left out, as you asked. You can change this under ⚙ Key & model.");
+    return;
+  }
   const doubtful = blocked.length ? -1 : pages.findIndex(p => !p.keep && !p.unchecked && notCarKind(p.ocrText || ""));
   confirmedForCar = pages.some(p => p.keep);
   $("notCarAsk").hidden = doubtful < 0;
   if (doubtful >= 0) {
     const kind = notCarKind(pages[doubtful].ocrText);
-    $("notCarText").textContent = (pages.length > 1 ? `Upload ${doubtful + 1} looks like ${kind}` : `This looks like ${kind}`) + ", not a car document.";
+    const who = pages.length > 1 ? `Upload ${doubtful + 1}` : "This";
+    $("notCarText").textContent = kind === "other" ? `${who} doesn't look like a car document.`
+      : kind === RECEIPT ? `${who} looks like a card payment receipt.`
+      : `${who} looks like ${kind}, not a car document.`;
+    $("notCarQ").textContent = kind === RECEIPT ? "If it's for this car's work, keeping it records what you paid. Keep it?" : "Are you sure you want to upload it here?";
+    $("notCarRememberRow").hidden = kind !== RECEIPT;
+    $("notCarRemember").checked = false;
     $("notCarNo").textContent = pages.length > 1 ? `No, remove upload ${doubtful + 1}` : "No, remove it";
     $("notCarThumb").replaceChildren(smallNumbered(doubtful));
     $("notCarAsk").dataset.page = doubtful;
@@ -1195,6 +1257,7 @@ $("removeBlocked").onclick = () => {
 // (or there was no text to judge, when the OCR couldn't run).
 const VEHICLE_WORDS = /\b(make|model|reg|vrm|chassis|odometer|miles|mot|mileage|odometer|registration|vin|v5c?|dvla|dvsa|tyres?|tires?|brakes?|pads|discs|oil|filters?|service|servicing|labour|garage|motors|exhaust|clutch|battery|wipers?|alignment|tracking|engine|gearbox|coolant|cambelt|timing belt|vehicle|car|van|motorbike|insurance|breakdown|recovery|valet|bodywork|windscreen)\b/g;
 const UK_PLATE = /\b[A-Z]{2}\d{2}\s?[A-Z]{3}\b/;
+const RECEIPT = "a card payment receipt";
 const LOOKS_LIKE = [
   ["an energy or utility bill", /\b(electricity|kwh|tariff|meter reading|standing charge|water bill|broadband|energy)\b/i],
   ["a council tax bill", /council tax/i],
@@ -1204,21 +1267,28 @@ const LOOKS_LIKE = [
   ["a medical letter or prescription", /\b(nhs|patient|prescription|surgery|hospital|clinic|dosage)\b/i],
   ["a phone bill", /\b(minutes|data allowance|roaming|mobile plan)\b/i],
   ["an identity document", /\b(passport|nationality|place of birth)\b/i],
+  [RECEIPT, /\b(contactless|auth(orisation)?\s*code|merchant|card\s*holder|pan\s*seq|visa|mastercard|maestro|amex|debit|credit card|pin verified|approved|terminal)\b/i],
   ["a shop receipt", /\b(tesco|sainsbury'?s|asda|aldi|lidl|morrisons|waitrose|co-?op|change due|cashier|clubcard)\b/i],
 ];
 // What a page looks like, if it doesn't look like car paperwork; null if it does.
 function notCarKind(text) {
   if (ocrFailedLast) return null;
   const words = text.match(/[A-Za-z]{3,}/g) || [];
-  if (words.length < 8) return "a photo with little or no text";
+  if (words.length < 8) return "a photo rather than a document";
   const hits = new Set((text.toLowerCase().match(VEHICLE_WORDS) || []));
   if (hits.size + (UK_PLATE.test(text) ? 2 : 0) >= 2) return null;
   const kind = LOOKS_LIKE.map(([name, re]) => [name, (text.match(new RegExp(re.source, "gi")) || []).length]).sort((a, b) => b[1] - a[1])[0];
-  return kind[1] ? kind[0] : "a document that isn't about a car";
+  return kind[1] ? kind[0] : "other";
 }
 let ocrFailedLast = false, confirmedForCar = false;
-$("notCarYes").onclick = () => { pages[+$("notCarAsk").dataset.page].keep = true; afterChecks(); };
-$("notCarNo").onclick = () => { const n = +$("notCarAsk").dataset.page; removePages((p, i) => i === n); };
+function rememberReceipts(choice) {
+  if ($("notCarRememberRow").hidden || !$("notCarRemember").checked) return;
+  store.set("porter.receipts", choice); $("receiptPref").value = choice;
+}
+$("notCarYes").onclick = () => { rememberReceipts("keep"); pages[+$("notCarAsk").dataset.page].keep = true; afterChecks(); };
+$("notCarNo").onclick = () => { rememberReceipts("drop"); const n = +$("notCarAsk").dataset.page; removePages((p, i) => i === n); };
+$("receiptPref").value = store.get("porter.receipts") || "ask";
+$("receiptPref").onchange = e => store.set("porter.receipts", e.target.value);
 
 // Step 2: the owner checks the boxes. Tap toggles a box; in draw mode, drag adds one.
 let drawing = false;
@@ -1400,13 +1470,18 @@ $("sendBtn").onclick = async () => {
       const k = 1 / (scales[b.page - 1] || 1);
       b.x0 = Math.round(b.x0 * k); b.y0 = Math.round(b.y0 * k); b.x1 = Math.round(b.x1 * k); b.y1 = Math.round(b.y1 * k);
     }
-    if (result.content_flag && result.content_flag !== "none") {
-      const reason = result.content_flag_reason || "it doesn't look like vehicle paperwork";
+    // People are checked on the phone already (a hand holding the page is
+    // fine), so only the other flags stop a scan. The pages are kept, so the
+    // owner can remove the one that's the problem and send the rest again.
+    if (result.content_flag && !["none", "shows_person"].includes(result.content_flag)) {
+      const reason = result.content_flag_reason || "it doesn't look like vehicle paperwork.";
       result = null;
-      resetPages();
-      setStatus(`Porter can't accept this: ${reason} Nothing was saved, and the pages have been removed.`, "error");
+      $("sendBtn").disabled = false;
+      setStatus(`Porter can't accept this: ${reason} Nothing was saved. Your uploads are still here: tap Back to photos, remove the one that's the problem (✕), then send again.`, "error", status);
       return;
     }
+    if (result.content_flag === "shows_person")   // noted, never blocking
+      result.notes = [result.notes, `Noted, not a problem: ${result.content_flag_reason || "part of a person shows on a page."}`].filter(Boolean).join(" ");
     const aiFound = result.pii.length;
     result.pii.forEach(p => { p.source = "ai"; });
     result.pii.unshift(...pages.flatMap(p => p.local.filter(b => b.on).map(({ on, ...b }) => b)));
