@@ -55,12 +55,19 @@ input[type=file] { display: none; }
 .thumb .state.waiting { background: rgba(0,0,0,.45); }
 .thumb .state.busy { background: rgba(31,111,235,.55); }
 .thumb .state.done { background: transparent; align-items: flex-start; justify-content: flex-end; padding: 38px 8px; font-size: 18px; color: var(--good); text-shadow: 0 0 3px #000; }
-.thumb .num { position: absolute; left: 4px; bottom: 4px; min-width: 24px; padding: 1px 6px; border-radius: 10px; background: rgba(0,0,0,.65); color: #fff; font-size: 13px; font-weight: 700; text-align: center; }
+.thumb .num, .corner-num { position: absolute; right: 4px; top: 4px; min-width: 26px; padding: 2px 7px; border-radius: 13px; background: var(--accent); color: var(--accent-text); font-size: 14px; font-weight: 800; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.4); pointer-events: none; }
+.numbered { position: relative; margin-bottom: 10px; }
+.numbered canvas { margin-bottom: 0; }
+.corner-num { right: 8px; top: 8px; font-size: 16px; min-width: 30px; }
+.ask-thumb { display: flex; gap: 10px; align-items: flex-start; }
+.ask-thumb .numbered { flex: none; width: 72px; margin: 0; }
+.ask-thumb img { width: 72px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
+.ask-thumb .corner-num { right: 2px; top: 2px; font-size: 12px; min-width: 20px; padding: 1px 5px; }
 #thumbNav { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 #thumbNav input { flex: 1; accent-color: var(--accent); }
 #thumbNav span { white-space: nowrap; }
 #thumbs.busy .thumb button { display: none; }
-.thumb button { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
+.thumb button { position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
   background: rgba(0,0,0,.65); color: #fff; font-size: 14px; line-height: 28px; padding: 0; cursor: pointer; }
 .status { margin-top: 12px; min-height: 1.4em; }
 .status.error { color: var(--bad); }
@@ -218,11 +225,11 @@ details > summary { font-weight: 600; }
   <section class="card" id="deviceCheck" data-tab="scan" hidden>
     <h2>Check before sending</h2>
     <div class="ask" id="blockedAsk" hidden>
-      <p style="margin:0 0 10px"><b id="blockedText"></b></p>
+      <div class="ask-thumb"><div id="blockedThumb"></div><p style="margin:0 0 10px"><b id="blockedText"></b></p></div>
       <div class="row"><button class="btn secondary" id="removeBlocked" type="button">Remove that page</button></div>
     </div>
     <div class="ask" id="notCarAsk" hidden>
-      <p style="margin:0 0 10px"><b id="notCarText"></b> Are you sure you want to upload it here?</p>
+      <div class="ask-thumb"><div id="notCarThumb"></div><p style="margin:0 0 10px"><b id="notCarText"></b> Are you sure you want to upload it here?</p></div>
       <div class="row">
         <button class="btn secondary" id="notCarYes" type="button">Yes, keep it</button>
         <button class="btn secondary" id="notCarNo" type="button">No, remove it</button>
@@ -230,7 +237,7 @@ details > summary { font-weight: 600; }
     </div>
     <p class="small"><b>Nothing has been sent yet.</b> <span id="checkLead"></span></p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px">
-      <li>Tap a box to uncover it, e.g. the garage's own address, which AI needs to read.</li>
+      <li>Tap a box to uncover it if it isn't personal. The garage's own details are never covered.</li>
       <li>Missed something, like a signature? Tap <b>Draw a box</b>, then drag across it.</li>
     </ul>
     <div class="row" style="margin-bottom:10px"><button class="btn secondary" id="drawBtn" type="button" aria-pressed="false">✏️ Draw a box</button></div>
@@ -601,7 +608,7 @@ function renderPages() {
   $("thumbs").replaceChildren(...pages.map((p, i) => {
     const x = el("button", { type: "button", ariaLabel: `Remove page ${i + 1}` }, "✕");
     x.onclick = () => removePage(i);
-    const img = el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` });
+    const img = el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Upload ${i + 1}` });
     img.onclick = () => openViewer(i);
     const state = el("div", { className: "state" + (p.badge ? " " + p.badge.state : ""), ariaHidden: "true" }, p.badge?.text || "");
     state.hidden = !p.badge;
@@ -644,6 +651,10 @@ $("thumbSlider").addEventListener("input", e => {
   strip.scrollLeft = e.target.value / 1000 * (strip.scrollWidth - strip.clientWidth);
 });
 
+// Every image carries its upload number in the top-right corner.
+const numbered = (node, n) => el("div", { className: "numbered" }, node, el("span", { className: "corner-num", ariaHidden: "true" }, String(n)));
+const smallNumbered = i => numbered(el("img", { src: pages[i].small.toDataURL("image/jpeg", 0.5), alt: `Upload ${i + 1}` }), i + 1);
+
 function setRemoveLabel() { $("clearBtn").textContent = processing ? "Cancel" : pages.length > 1 ? "Remove all" : "Remove"; }
 
 // Full-size look at a page, to check it's the right one before processing.
@@ -652,14 +663,14 @@ function openViewer(i) {
   const p = pages[i];
   if (!p) return;
   const btn = (label, fn) => { const b = el("button", { type: "button" }, label); b.onclick = fn; return b; };
-  const v = el("div", { id: "viewer", role: "dialog", ariaLabel: `Page ${i + 1}` },
+  const v = el("div", { id: "viewer", role: "dialog", ariaLabel: `Upload ${i + 1}` },
     el("div", { className: "bar" },
-      el("span", {}, `Page ${i + 1} of ${pages.length}`),
+      el("span", {}, `Upload ${i + 1} of ${pages.length}`),
       ...(i > 0 ? [btn("‹", () => openViewer(i - 1))] : []),
       ...(i < pages.length - 1 ? [btn("›", () => openViewer(i + 1))] : []),
       btn("Remove", () => { closeViewer(); removePage(i); }),
       btn("Close", closeViewer)),
-    el("div", { className: "scroll" }, el("img", { src: p.small.toDataURL("image/jpeg", 0.85), alt: `Page ${i + 1}` })));
+    el("div", { className: "scroll" }, numbered(el("img", { src: p.small.toDataURL("image/jpeg", 0.85), alt: `Upload ${i + 1}` }), i + 1)));
   document.body.append(v);
 }
 function closeViewer() { $("viewer")?.remove(); }
@@ -886,6 +897,9 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) { pausedNote = "Paused while the screen was off. Carrying on… "; return; }
   stayAwake(true);   // the lock is dropped whenever the page is hidden; take it again
 });
+// Common UK first names, so "STEVE BEALE" or "Jane Smith" on a line of its
+// own is caught even with no "Customer:" label or address beside it.
+const FIRST_NAMES = new Set("james john robert michael william david richard joseph thomas charles chris christopher daniel matthew anthony mark donald steven steve stephen paul andrew andy josh joshua kenneth kevin brian george timothy tim ronald edward ed jason jeffrey jeff ryan jacob gary gaz nicholas nick eric jonathan jon larry justin scott brandon benjamin ben samuel sam gregory greg alexander alex frank patrick pat raymond ray jack dennis jerry tyler aaron jose adam nathan henry harry douglas zachary peter pete kyle walter ethan jeremy keith christian roger noah gerald carl terry sean shaun austin arthur lawrence dylan jesse jordan bryan billy bruce gabriel joe logan albert alan allan juan wayne roy ralph randy eugene vincent russell elijah louis bobby philip phil johnny lee liam oliver ollie charlie alfie freddie archie leo jake connor callum kieran lewis luke owen rhys dean craig darren neil ian graham colin martin barry stuart stewart trevor nigel derek clive malcolm gordon glen glenn duncan rory finlay jamie danny tom tommy rob bob bill mary patricia jennifer linda elizabeth liz barbara susan sue jessica sarah karen nancy lisa betty margaret sandra ashley kimberly kim emily donna michelle dorothy carol amanda melissa deborah debbie stephanie rebecca becky laura sharon cynthia kathleen amy shirley angela helen anna brenda pamela nicole emma samantha katherine kate catherine christine debra rachel carolyn janet virginia maria heather diane julie joyce victoria vicky kelly christina joan evelyn lauren judith olivia megan cheryl martha andrea frances hannah jacqueline jackie ann anne gloria jean kathryn alice teresa sara janice doris madison julia grace judy abigail marie denise beverly amber theresa marilyn danielle diana brittany natalie sophia sophie rose isabella isla ava mia poppy lily ella chloe charlotte amelia jade leanne gemma claire clare kerry tracy tracey joanne jo lorraine wendy jane jill gillian gill fiona kirsty lucy holly zoe beth".split(" "));
 const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact|operator|tester|inspector|technician)\b\s*:?/i;
 const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
 const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d[d.length - 1 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
@@ -970,14 +984,21 @@ function findPersonalData(data, page) {
     if (/sort|account|acct|a\/c/i.test(t)) boxMatch(line, /\b\d{2}-\d{2}-\d{2}\b|\b\d{8}\b/g, "account_or_card_number");
     if (!/serial|s\/n|part|invoice|order|vts|batch/i.test(t)) boxMatch(line, /(?<!\d)(?:\d{4}\s?\d{3}\s?\d{4}|\d{11})(?!\d)/g, "v5c_document_reference", m => !/^0/.test(m));
     boxMatch(line, /\b(?:Mr|Mrs|Ms|Miss|Mx|Dr)\.?\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3}/g, "person_name");
+    // A known first name followed by a surname-like word, anywhere outside a business line.
+    if (!biz) boxMatch(line, /\b([A-Za-z][a-z]+|[A-Z]{2,})\s+(?:[A-Z]\.?\s+)?([A-Z][a-z'-]+|[A-Z][A-Z'-]+)\b/g, "person_name",
+      m => { const [first, ...rest] = m.split(/\s+/); return FIRST_NAMES.has(first.toLowerCase()) && !rest.some(w => FIRST_NAMES.has(w.toLowerCase()) && rest.length === 1 && false) && !BUSINESS.test(m); });
     // A postcode: box its line and the address lines stacked above it.
     if (/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i.test(t)) {
       const block = [line];
-      for (let up = above(line), n = 0; up && n < 3 && !NOT_ADDRESS.test(up.text); up = above(up), n++) block.push(up);
+      for (let up = above(line), n = 0; up && n < 4 && !NOT_ADDRESS.test(up.text); up = above(up), n++) block.push(up);
       const top = block[block.length - 1], over = directlyAbove(top);
       const labelled = [...block, over].some(o => o && CUSTOMER_LABEL.test(o.text));
       const business = !labelled && block.some(businessy);   // the garage's address, not the owner's
       for (const l of block) add(l.bbox, "address", l.text, business);
+      // A name-like line just above the owner's address ("STEVE BEALE"): their name.
+      const nameLine = !business && directlyAbove(block[block.length - 1]);
+      if (nameLine && /^(?:(?:mr|mrs|ms|miss|mx|dr)\.?\s+)?[A-Za-z][A-Za-z'.-]+(?:\s+[A-Za-z][A-Za-z'.-]+){1,3}$/i.test(nameLine.text.trim()) && !bizText(nameLine.text))
+        add(nameLine.bbox, "person_name", nameLine.text);
     }
     // "Customer: Jane Smith": box what follows the label, or the line below if nothing does.
     const isSignature = /\b(signature|signed|sign here)\b/i.test(t);
@@ -1056,11 +1077,11 @@ $("scanBtn").onclick = async () => {
       if (!live()) return;
       let step = "Reading";
       markThumb(i, "busy", "Processing…");
-      const say = what => { step = what; markThumb(i, "busy", "Processing…"); setStatus(`${pausedNote}Processing page ${i + 1} of ${pages.length}…`, "busy"); };
+      const say = what => { step = what; markThumb(i, "busy", "Processing…"); setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}…`, "busy"); };
       ocrProgress = m => {
         if (m.status !== "recognizing text" || step !== "Reading") return;
         markThumb(i, "busy", `Processing ${Math.round(m.progress * 100)}%`);
-        setStatus(`${pausedNote}Processing page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
+        setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
       };
       try {
         const { data, rot } = await orStop(withTimeout(recognizeUpright(worker, p.small, say, p.straightened), OCR_PAGE_TIMEOUT_MS));
@@ -1092,7 +1113,7 @@ $("scanBtn").onclick = async () => {
   if (!live()) return;
   if (h) {
     for (const [i, p] of pages.entries()) {
-      setStatus(`${pausedNote}Processing page ${i + 1} of ${pages.length}…`, "busy");
+      setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}…`, "busy");
       try { p.person = personIn(await orStop(h.detect(p.small))); } catch (err) { if (!live()) return; peopleFailed = err; }
       if (!live()) return;
       markThumb(i, "done", "✓");
@@ -1107,7 +1128,7 @@ $("scanBtn").onclick = async () => {
   afterChecks();
   const problems = [
     ocrFailed && `Your phone couldn't look for personal details (${ocrFailed.message}). Cover them yourself: drag across each one before sending.`,
-    skipped.length && `Page${skipped.length > 1 ? "s" : ""} ${skipped.join(", ")} took too long to read, so your phone couldn't check ${skipped.length > 1 ? "them" : "it"}. Cover any personal details yourself (Draw a box), or remove ${skipped.length > 1 ? "those pages" : "that page"}.`,
+    skipped.length && `Upload${skipped.length > 1 ? "s" : ""} ${skipped.join(", ")} took too long to read, so your phone couldn't check ${skipped.length > 1 ? "them" : "it"}. Cover any personal details yourself (Draw a box), or remove ${skipped.length > 1 ? "those uploads" : "that upload"}.`,
     peopleFailed && "Your phone couldn't check for photos of people, so please make sure none of these pages shows anyone.",
   ].filter(Boolean);
   if (ocrFailed || skipped.length) setDrawing(true);
@@ -1119,21 +1140,23 @@ $("scanBtn").onclick = async () => {
 // that doesn't look like car paperwork, then show the boxes to check.
 function afterChecks() {
   showDeviceCheck();
-  const blocked = pages.map((p, i) => p.person && `page ${i + 1} seems to show ${p.person}`).filter(Boolean);
+  const blocked = pages.map((p, i) => p.person && `upload ${i + 1} seems to show ${p.person}`).filter(Boolean);
+  $("blockedThumb").replaceChildren(...pages.map((p, i) => p.person ? smallNumbered(i) : null).filter(Boolean).slice(0, 1));
   $("blockedAsk").hidden = !blocked.length;
   if (blocked.length) {
     const text = blocked.join(", ");
     $("blockedText").textContent = text[0].toUpperCase() + text.slice(1) + ". Porter doesn't accept photos of people, so " +
       (blocked.length === 1 ? "it" : "they") + " won't be sent.";
-    $("removeBlocked").textContent = pages.length === blocked.length ? "Remove and start again" : `Remove ${blocked.length === 1 ? "that page" : "those pages"}`;
+    $("removeBlocked").textContent = pages.length === blocked.length ? "Remove and start again" : `Remove ${blocked.length === 1 ? "that upload" : "those uploads"}`;
   }
   const doubtful = blocked.length ? -1 : pages.findIndex(p => !p.keep && !p.unchecked && notCarKind(p.ocrText || ""));
   confirmedForCar = pages.some(p => p.keep);
   $("notCarAsk").hidden = doubtful < 0;
   if (doubtful >= 0) {
     const kind = notCarKind(pages[doubtful].ocrText);
-    $("notCarText").textContent = (pages.length > 1 ? `Page ${doubtful + 1} looks like ${kind}` : `This looks like ${kind}`) + ", not a car document.";
-    $("notCarNo").textContent = pages.length > 1 ? `No, remove page ${doubtful + 1}` : "No, remove it";
+    $("notCarText").textContent = (pages.length > 1 ? `Upload ${doubtful + 1} looks like ${kind}` : `This looks like ${kind}`) + ", not a car document.";
+    $("notCarNo").textContent = pages.length > 1 ? `No, remove upload ${doubtful + 1}` : "No, remove it";
+    $("notCarThumb").replaceChildren(smallNumbered(doubtful));
     $("notCarAsk").dataset.page = doubtful;
   }
   $("sendBtn").disabled = doubtful >= 0 || blocked.length > 0;
@@ -1153,7 +1176,7 @@ $("removeBlocked").onclick = () => {
 // Is this a car document at all? Judged on the phone from the OCR text, so
 // the owner is asked before anything is sent. Null means it looks car-related
 // (or there was no text to judge, when the OCR couldn't run).
-const VEHICLE_WORDS = /\b(mot|mileage|odometer|registration|vin|v5c?|dvla|dvsa|tyres?|tires?|brakes?|pads|discs|oil|filters?|service|servicing|labour|garage|motors|exhaust|clutch|battery|wipers?|alignment|tracking|engine|gearbox|coolant|cambelt|timing belt|vehicle|car|van|motorbike|insurance|breakdown|recovery|valet|bodywork|windscreen)\b/g;
+const VEHICLE_WORDS = /\b(make|model|reg|vrm|chassis|odometer|miles|mot|mileage|odometer|registration|vin|v5c?|dvla|dvsa|tyres?|tires?|brakes?|pads|discs|oil|filters?|service|servicing|labour|garage|motors|exhaust|clutch|battery|wipers?|alignment|tracking|engine|gearbox|coolant|cambelt|timing belt|vehicle|car|van|motorbike|insurance|breakdown|recovery|valet|bodywork|windscreen)\b/g;
 const UK_PLATE = /\b[A-Z]{2}\d{2}\s?[A-Z]{3}\b/;
 const LOOKS_LIKE = [
   ["an energy or utility bill", /\b(electricity|kwh|tariff|meter reading|standing charge|water bill|broadband|energy)\b/i],
@@ -1265,7 +1288,7 @@ function showDeviceCheck() {
       start = null;
       paintCheck(c, p); checkSummary();
     };
-    return c;
+    return numbered(c, i + 1);
   }));
   checkSummary();
   setStatus("", "", $("checkStatus"));
@@ -1441,7 +1464,7 @@ function drawPage(i, view) {
 
 let view = "review";
 function renderCanvases() {
-  $("canvases").replaceChildren(...pages.map((_, i) => drawPage(i, view)));
+  $("canvases").replaceChildren(...pages.map((_, i) => numbered(drawPage(i, view), i + 1)));
 }
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   view = t.dataset.view;
@@ -1477,7 +1500,7 @@ function render() {
   renderCanvases();
   $("piiList").replaceChildren(...r.pii.map(p => {
     const li = document.createElement("li");
-    li.textContent = `Page ${p.page} · ${p.category.replaceAll("_", " ")} · ` +
+    li.textContent = `Upload ${p.page} · ${p.category.replaceAll("_", " ")} · ` +
       ({ cross_check: "cross-check", ai: "spotted by AI after sending", user: "you drew it" }[p.source] || "covered on your phone");
     if (p.source === "cross_check" || p.source === "ai") li.className = "flagged";
     return li;
