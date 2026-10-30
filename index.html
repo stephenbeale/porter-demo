@@ -100,7 +100,10 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 </head>
 <body>
 <main>
-  <h1>Porter <span class="muted small">demo</span></h1>
+  <h1 style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+    <span>Porter <span class="muted small">demo</span></span>
+    <a href="#" id="settingsLink" class="small" style="font-weight:500" hidden>⚙ Key &amp; model</a>
+  </h1>
   <p class="muted small">Scan a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
 
   <section class="card" id="installTip" hidden>
@@ -111,6 +114,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
   </section>
 
   <section class="card" id="settings">
+    <p class="small status error" id="connectProblem" hidden></p>
     <h2>1. Connect</h2>
     <div id="inviteBox" hidden>
       <label for="invite">Invite code</label>
@@ -120,7 +124,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     </div>
     <div id="keyBox">
       <div id="keyEntry">
-        <label for="key">Anthropic API key</label>
+        <label for="key">Anthropic API key <span id="keyCheck" class="small" style="font-weight:500"></span></label>
         <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
       </div>
       <p class="small" id="keySaved" hidden>✓ API key saved (<span id="keyHint"></span>) · <a href="#" id="changeKey">Change</a></p>
@@ -338,7 +342,46 @@ $("key").addEventListener("change", e => {
 $("changeKey").addEventListener("click", e => { e.preventDefault(); editingKey = true; showKey(); $("key").focus(); $("key").select(); });
 showKey();
 $("model").addEventListener("change", e => store.set("porter.model", e.target.value));
-$("forget").addEventListener("click", e => { e.preventDefault(); store.del("porter.key"); $("key").value = ""; editingKey = false; showKey(); });
+
+// Once a key (or invite code) is known to work, the whole Connect card hides
+// until it stops working; "Key & model" by the title opens it on demand.
+// Hiding waits for the next use or visit, never the blur after typing, so the
+// page doesn't jump under the tap that follows.
+let settingsOpen = false;
+const connected = () => store.get("porter.connected") === "1";
+function showConnect() {
+  $("settings").hidden = connected() && !settingsOpen;
+  $("settingsLink").hidden = !connected();
+  $("settingsLink").textContent = settingsOpen ? "Hide settings" : "⚙ Key & model";
+}
+function markConnected() {
+  if (connected()) return;
+  store.set("porter.connected", "1");
+  setTimeout(() => { settingsOpen = false; editingKey = false; showKey(); showConnect(); });
+}
+function disconnect(message) {
+  store.del("porter.connected");
+  settingsOpen = false; editingKey = true;
+  $("connectProblem").hidden = false; $("connectProblem").textContent = message;
+  showKey(); showConnect();
+  $("settings").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("settingsLink").addEventListener("click", e => { e.preventDefault(); settingsOpen = !settingsOpen; showConnect(); });
+const keyTrouble = (status, message) => status === 401 || status === 403 || /credit balance|api key|authentication/i.test(message || "");
+
+// Check a newly typed key straight away (a free call), so a typo shows up now.
+async function verifyKey(k) {
+  $("keyCheck").textContent = "checking…";
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: {
+      "x-api-key": k, "anthropic-version": API_VERSION, "anthropic-dangerous-direct-browser-access": "true" } });
+    if (resp.ok) { $("keyCheck").textContent = "✓ works"; $("connectProblem").hidden = true; return; }
+    const msg = (await resp.json().catch(() => null))?.error?.message;
+    $("keyCheck").textContent = keyTrouble(resp.status, msg) ? "✗ not accepted" : "";
+  } catch { $("keyCheck").textContent = ""; }   // offline or blocked: the first real use will tell
+}
+$("key").addEventListener("change", e => { const k = e.target.value.trim(); if (k) verifyKey(k); else $("keyCheck").textContent = ""; });
+$("forget").addEventListener("click", e => { e.preventDefault(); store.del("porter.key"); store.del("porter.connected"); $("key").value = ""; $("keyCheck").textContent = ""; editingKey = false; showKey(); showConnect(); });
 
 let pages = [];   // { full: HTMLCanvasElement, small: HTMLCanvasElement }
 let result = null;
@@ -378,7 +421,7 @@ function showMode() {
   $("motNeedsServer").hidden = mode === "invite";
   $("motBtn").disabled = mode !== "invite";
 }
-const setMode = m => e => { e.preventDefault(); mode = m; store.set("porter.mode", m); showMode(); if (m === "invite") checkInvite(); };
+const setMode = m => e => { e.preventDefault(); mode = m; store.set("porter.mode", m); store.del("porter.connected"); showMode(); showConnect(); if (m === "invite") checkInvite(); };
 $("useKey").onclick = setMode("key");
 $("useInvite").onclick = setMode("invite");
 $("invite").addEventListener("change", e => { store.set("porter.invite", e.target.value.trim()); checkInvite(); });
@@ -394,6 +437,7 @@ async function checkInvite() {
     const d = await resp.json();
     if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
     out.textContent = `Welcome, ${d.name}. $${d.remaining_usd.toFixed(2)} of today's allowance left.`;
+    markConnected();
   } catch (err) {
     out.className = "small status error"; out.textContent = err.message;
   }
@@ -421,7 +465,14 @@ async function callClaude(cred, body) {
   const url = cred.invite ? BETA_SERVER + "/v1/messages" : "https://api.anthropic.com/v1/messages";
   const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   const msg = await resp.json();
-  if (!resp.ok) throw new Error(msg?.error?.message || `HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const m = msg?.error?.message || `HTTP ${resp.status}`;
+    if (keyTrouble(resp.status, m)) disconnect(cred.invite
+      ? "Your invite code stopped working. Check your invite link, or use your own API key."
+      : `Your API key stopped working (${m}). It may have expired, been revoked or run out of credit. Enter a new one below.`);
+    throw new Error(m);
+  }
+  markConnected();
   if (msg.stop_reason === "refusal") throw new Error("Porter can't accept this. Nothing was saved.");
   if (msg.stop_reason === "max_tokens") throw new Error("Response was cut off; try a shorter input.");
   return msg;
@@ -1619,6 +1670,7 @@ $("installTip").hidden = !ios || standalone || store.get("porter.installTipDone"
 $("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $("installTip").hidden = true; };
 
 showMode();
+showConnect();
 checkInvite();
 renderHistory();
 renderDueDates();
