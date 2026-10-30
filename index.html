@@ -88,6 +88,14 @@ table { width: 100%; border-collapse: collapse; font-size: .92em; }
 td { padding: 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
 td.num { text-align: right; white-space: nowrap; padding-left: 10px; font-variant-numeric: tabular-nums; }
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.compare { position: relative; cursor: pointer; line-height: 0; }
+.compare canvas { width: 100%; height: auto; display: block; margin: 0; }
+.compare .compare-top { position: absolute; inset: 0; }
+.compare-line { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--accent); pointer-events: none; }
+.compare-tag { position: absolute; bottom: 8px; padding: 3px 8px; border-radius: 8px; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; line-height: 1.4; pointer-events: none; }
+.compare-tag.left { left: 8px; } .compare-tag.right { right: 8px; }
+.compare-slider { display: flex; align-items: center; gap: 8px; margin: 6px 0 14px; color: var(--text-2); }
+.compare-slider input { flex: 1; accent-color: var(--accent); }
 .tab { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg); color: var(--text);
   font-size: 15px; font-weight: 600; cursor: pointer; }
 .tab[aria-selected=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
@@ -322,20 +330,17 @@ details > summary { font-weight: 600; }
     </section>
     <section class="card">
       <details id="redactionBox"><summary>Redacted pages</summary>
-      <div class="tabs" role="tablist" style="margin-top:10px">
-        <button class="tab" role="tab" aria-selected="true" data-view="review">Show the boxes</button>
-        <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer would see</button>
-      </div>
+      <p class="small" style="margin:10px 0">Slide to compare the boxes with <b>what a buyer would see</b>. Is a box covering something that isn't personal (like a word of small print)? <b>Tap it to uncover it</b>; tap again to cover it. This only changes the copy you keep or download.</p>
       <div id="canvases"></div>
       <details class="small"><summary>What do the box colours mean?</summary>
         <p class="muted small"><b>Red:</b> redacted on your phone before sending. <b>Purple:</b> personal details your phone missed, so they were sent, and AI found them; they're covered now. <b>Orange:</b> numbers matching your details from another scan, such as the end of a phone number showing under a receipt.</p>
       </details>
       <ul class="pii small" id="piiList" hidden></ul>
       <div class="row">
-        <button class="btn secondary" id="downloadBtn" type="button">⬇ Download redacted copy</button>
-        <button class="btn secondary" id="keepBtn" type="button">📎 Keep a copy for selling</button>
+        <button class="btn" id="keepBtn" type="button">✓ Looks right: keep a copy</button>
+        <button class="btn secondary" id="downloadBtn" type="button">⬇ Download it</button>
       </div>
-      <p class="muted small" id="keepNote">"Keep a copy" stores the redacted pages in Porter, on this phone, so Sell can show them to a buyer later.</p>
+      <p class="muted small" id="keepNote">Keeping a copy stores these redacted pages in Porter, on this phone, for History, Export and Sell.</p>
       </details>
       <div class="feedback" id="fbBox">
         <p style="font-weight:600;margin:0 0 4px">Help improve Porter: did the redaction cover all your personal details?</p>
@@ -458,7 +463,7 @@ details > summary { font-weight: 600; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.30-13";
+const APP_VERSION = "2026.10.30-14";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1824,7 +1829,7 @@ function boxesFor(i, page) {
   const f = page.full.width / page.small.width;
   const pad = Math.max(4, Math.round(page.full.width / 200));
   return result.pii.filter(p => p.page === i + 1).map(p => ({
-    ...p,
+    ...p, ref: p,
     x: Math.max(0, p.x0 * f - pad), y: Math.max(0, p.y0 * f - pad),
     w: (p.x1 - p.x0) * f + 2 * pad, h: (p.y1 - p.y0) * f + 2 * pad,
   }));
@@ -1837,21 +1842,41 @@ function drawPage(i, view) {
   const ctx = c.getContext("2d");
   ctx.drawImage(page.full, 0, 0);
   for (const b of boxesFor(i, page)) {
+    if (b.off) { if (view !== "redacted") { ctx.setLineDash([10, 8]); ctx.strokeStyle = "#7a786f"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); ctx.setLineDash([]); } continue; }
     if (view === "redacted") { ctx.fillStyle = "#000"; ctx.fillRect(b.x, b.y, b.w, b.h); }
     else { ctx.strokeStyle = { cross_check: "#ff8c00", ai: "#a020f0" }[b.source] || "#dc0000"; ctx.lineWidth = Math.max(3, c.width / 300); ctx.strokeRect(b.x, b.y, b.w, b.h); }
   }
   return c;
 }
 
-let view = "review";
-function renderCanvases() {
-  $("canvases").replaceChildren(...pages.map((_, i) => numbered(drawPage(i, view), i + 1)));
+// Each page is a before/after: the boxes underneath, what a buyer would see
+// on top, split where the slider is. Tapping a box uncovers or covers it.
+const compareAt = {};
+function comparePage(i) {
+  const boxes = drawPage(i, "review"), buyer = drawPage(i, "redacted");
+  buyer.className = "compare-top";
+  const at = compareAt[i] ?? 50;
+  buyer.style.clipPath = `inset(0 0 0 ${at}%)`;
+  const line = el("div", { className: "compare-line" }); line.style.left = at + "%";
+  const frame = el("div", { className: "compare" }, boxes, buyer, line,
+    el("span", { className: "compare-tag left" }, "Boxes"), el("span", { className: "compare-tag right" }, "Buyer sees"));
+  frame.onclick = e => {
+    const r = frame.getBoundingClientRect(), x = (e.clientX - r.left) * boxes.width / r.width, y = (e.clientY - r.top) * boxes.height / r.height;
+    const hit = boxesFor(i, pages[i]).filter(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h).sort((a, b) => a.w * a.h - b.w * b.h)[0];
+    if (!hit) return;
+    hit.ref.off = !hit.ref.off;
+    if (lastVisitId) $("keepBtn").disabled = false;   // a kept copy can be updated to match
+    const fresh = comparePage(i);
+    frame.closest(".page-compare").replaceWith(fresh);
+  };
+  const slider = el("input", { type: "range", min: 0, max: 100, value: at, ariaLabel: `Compare boxes and what a buyer sees, page ${i + 1}` });
+  slider.oninput = () => { compareAt[i] = +slider.value; buyer.style.clipPath = `inset(0 0 0 ${slider.value}%)`; line.style.left = slider.value + "%"; };
+  return el("div", { className: "page-compare" }, numbered(frame, i + 1),
+    el("div", { className: "compare-slider small" }, el("span", {}, "◀ Boxes"), slider, el("span", {}, "Buyer sees ▶")));
 }
-document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
-  view = t.dataset.view;
-  document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
-  renderCanvases();
-});
+function renderCanvases() {
+  $("canvases").replaceChildren(...pages.map((_, i) => comparePage(i)));
+}
 
 $("downloadBtn").onclick = () => {
   pages.forEach((_, i) => {
