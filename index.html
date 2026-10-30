@@ -428,6 +428,7 @@ details > summary { font-weight: 600; }
         </select>
       </div>
     </div>
+    <p class="small ask" id="tidyAsk" hidden>Some older items still have the garage's codes or odd wording in their names. <a href="#" id="tidyBtn"><b>Tidy up item names</b></a> (AI reads just the names, costs under 1p).</p>
     <div id="historyList"></div>
     <p class="muted small">Saved on this phone only. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
     <div id="historyEmpty"><p class="small muted">No documents saved yet.</p><button class="btn" type="button" id="firstAdd">➕ Add your first document</button></div>
@@ -482,7 +483,7 @@ details > summary { font-weight: 600; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.30-15";
+const APP_VERSION = "2026.10.30-16";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1699,6 +1700,7 @@ function normalizeScan(r) {
   r.total_cost = num(r.total_cost); r.amount_paid = num(r.amount_paid);
   for (const li of r.line_items || []) {
     li.quantity = num(li.quantity); li.unit_price = num(li.unit_price); li.line_total = num(li.line_total);
+    li.description = plainName(li.description);
     const c = String(li.category || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
     li.category = PART_CATEGORIES.has(c) ? c : "other";
   }
@@ -1991,10 +1993,21 @@ function render() {
 const HISTORY_KEY = "porter.history";
 const VISIT_FIELDS = ["possibly_missing", "doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "mileage", "mileage_unit",
   "garage_name", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "next_due"];
+// Garages prefix lines with their own stock codes ("BREAKDISC, Brake Disc",
+// "FSR, Full Service", "LAB, Replace drop links"): keep the plain words.
+function plainName(d) {
+  let t = String(d || "").trim();
+  const m = t.match(/^([A-Z0-9][A-Z0-9\/&.]{1,14})\s*[,:–—-]\s+(.+)$/);
+  if (m && /[a-z]/.test(m[2])) t = /^\d+W-?\d+$/i.test(m[1]) ? `${m[2].trim()} (${m[1]})` : m[2].trim();   // keep an oil grade
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
 function loadHistory() {
   try {
     const h = JSON.parse(store.get(HISTORY_KEY));
-    if (Array.isArray(h?.visits) && Array.isArray(h?.notes)) return { feedback: [], ...h };
+    if (Array.isArray(h?.visits) && Array.isArray(h?.notes)) {
+      for (const v of h.visits) for (const li of v.line_items || []) li.description = plainName(li.description);
+      return { feedback: [], ...h };
+    }
   } catch {}
   return { visits: [], notes: [], feedback: [] };
 }
@@ -2054,7 +2067,7 @@ function missingBox(v, onDone) {
   return el("div", { className: "ask", style: "margin:8px 0" }, el("p", { className: "small", style: "margin:0" }, el("b", {}, "Anything missing? "), "This visit looks like it might be missing:"), list, el("div", { className: "row" }, add, none));
 }
 function saveVisit(doc) {
-  const v = { id: newId(), savedAt: todayIso() };
+  const v = { id: newId(), savedAt: todayIso(), tidied: true };
   for (const k of VISIT_FIELDS) v[k] = doc[k];
   saved.visits.push(v);
   saveHistory();
@@ -2307,6 +2320,7 @@ function renderHistory() {
     }));
   }
   renderOverview(visits);
+  $("tidyAsk").hidden = !saved.visits.some(v => !v.tidied && v.source !== "dvsa" && v.line_items.length);
   const total = visits.reduce((t, v) => t + (v.total_cost ?? 0), 0);
   const miles = Math.max(0, ...visits.map(v => v.mileage || 0));
   const dated = visits.filter(v => v.date && v.mileage != null), first = dated[dated.length - 1], last = dated[0];
@@ -2734,6 +2748,30 @@ $("backupBtn").onclick = async () => {
   store.set("porter.lastBackup", new Date().toISOString());
   showBackupNudge();
   setStatus(`Backed up ${saved.visits.length} document${saved.visits.length === 1 ? "" : "s"} and ${saved.notes.length} note${saved.notes.length === 1 ? "" : "s"}.`, "", $("historyStatus"));
+};
+// Visits saved before Porter asked for plain names can be tidied in one go:
+// only the item names are sent, and only to get plain wording back.
+const TIDY_SCHEMA = { type: "object", properties: { names: { type: "array", items: { type: "string" } } }, required: ["names"], additionalProperties: false };
+$("tidyBtn").onclick = async e => {
+  e.preventDefault();
+  const cred = credentials($("historyStatus"));
+  if (!cred) return;
+  const todo = saved.visits.filter(v => !v.tidied && v.source !== "dvsa" && v.line_items.length), items = todo.flatMap(v => v.line_items);
+  setStatus("Tidying item names…", "busy", $("historyStatus"));
+  try {
+    const msg = await callClaude(cred, {
+      model: "claude-haiku-5-5", max_tokens: 4000,
+      system: "Rewrite each car-service line item in plain words an owner or buyer would understand, naming the work or part, e.g. \"Brake discs\", \"Alternator replacement\", \"Battery (5-year RAC warranty)\". Fix spelling; drop stock codes, job codes, referral wording, part numbers and VAT breakdowns; keep useful specs like an oil grade or tyre size. Return the names in the same order, one for each.",
+      output_config: { format: { type: "json_schema", schema: TIDY_SCHEMA } },
+      messages: [{ role: "user", content: items.map((it, i) => `${i + 1}. ${it.description}`).join("\n") }],
+    });
+    const { names } = JSON.parse(msg.content.find(b => b.type === "text")?.text);
+    if (names.length !== items.length) throw new Error("the names didn't come back one for one");
+    items.forEach((it, i) => { if (names[i]?.trim()) it.description = names[i].trim(); });
+    todo.forEach(v => { v.tidied = true; });
+    saveHistory(); renderHistory();
+    setStatus(`Tidied ${items.length} item name${items.length === 1 ? "" : "s"}.`, "", $("historyStatus"));
+  } catch (err) { setStatus("Couldn't tidy the names: " + err.message, "error", $("historyStatus")); }
 };
 $("historySort").onchange = e => { store.set("porter.sort", e.target.value); renderHistory(); };
 $("firstAdd").onclick = () => { showTab("scan"); scrollTo({ top: 0 }); };
