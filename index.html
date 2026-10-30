@@ -114,6 +114,15 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 #checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
 .ask { border: 2px solid var(--warn); border-radius: 12px; padding: 12px; margin: 0 0 12px; }
 .appfoot { max-width: 720px; margin: 8px auto 32px; padding: 0 16px; text-align: center; }
+.car-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.car-bar h2 { margin: 0; }
+.plate { display: inline-flex; align-items: stretch; border-radius: 6px; overflow: hidden; border: 2px solid #111; background: #f6c600; color: #111;
+  font-weight: 800; font-size: 17px; letter-spacing: 1px; flex: none; font-family: "Arial Narrow", Arial, sans-serif; line-height: 1; }
+.plate::before { content: "UK"; display: flex; align-items: flex-end; padding: 4px 4px 3px; background: #1f4aa8; color: #fff; font-size: 10px; letter-spacing: 0; }
+.plate span { padding: 5px 8px; white-space: nowrap; }
+.car-switch { margin: 10px 0 0; }
+.car-switch select { width: auto; margin: 0; }
+#addCar { display: inline-block; margin: 8px 0 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .card-head h2 { margin: 0; }
 .hide-btn { border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 6px 14px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
@@ -440,7 +449,14 @@ h3.panel-head { justify-content: flex-start; }
         <button class="btn secondary" id="scanAnother" type="button">Add another</button>
       </div>
     </div>
-    <h2>Your car's history</h2>
+    <div class="car-bar">
+      <h2>Your car's history</h2>
+      <span class="plate" id="carPlate" hidden></span>
+    </div>
+    <div class="car-switch" id="carSwitch" hidden>
+      <select id="carSelect" aria-label="Which car"></select>
+    </div>
+    <a href="#" class="small" id="addCar">➕ Add another car</a> <a href="#" class="small" id="removeCar" hidden style="margin-left:12px"></a>
     <section class="panel" id="statsPanel" hidden>
       <h3 class="panel-head"><span class="panel-icon" aria-hidden="true">📊</span>At a glance</h3>
       <div class="stats" id="historyStats"></div>
@@ -542,7 +558,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.30-27";
+const APP_VERSION = "2026.10.30-28";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1672,7 +1688,8 @@ function showJustAdded(warn) {
   const v = saved.visits.find(x => x.id === lastVisitId);
   const showMissing = () => $("missingAsk").replaceChildren(...(v?.possibly_missing?.length ? [missingBox(v, showMissing)] : []));
   showMissing();
-  $("justAddedText").textContent = $("resultStatus").textContent;
+  $("justAddedText").textContent = [otherCarNote, $("resultStatus").textContent].filter(Boolean).join(" ");
+  otherCarNote = "";
   $("scanAnother").textContent = laterDocs.length ? `Next: ${laterDocs[0].label}` : "Add another";
   $("justAddedText").className = "small" + (warn ? " status error" : "");
   $("justAdded").hidden = false;
@@ -2074,6 +2091,36 @@ function loadHistory() {
   return { visits: [], notes: [], feedback: [] };
 }
 const saved = loadHistory();
+// More than one car: each job belongs to the car on its paperwork (or the car
+// being looked at when it had none). History, Coming up, Export and Sell show
+// one car at a time; DVLA/MOT details are kept per car.
+const regKey = r => String(r || "").replace(/\s/g, "").toUpperCase();
+const plateText = r => /^[A-Z]{2}\d{2}[A-Z]{3}$/.test(r) ? `${r.slice(0, 4)} ${r.slice(4)}` : r;
+saved.cars ||= [];
+saved.vehicles ||= {};
+if (saved.vehicle?.registration) { saved.vehicles[regKey(saved.vehicle.registration)] ||= saved.vehicle; delete saved.vehicle; }
+{
+  const counts = {};
+  for (const v of saved.visits) { const r = regKey(v.car || v.registration); if (r) counts[r] = (counts[r] || 0) + 1; }
+  const main = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "";
+  for (const v of saved.visits) v.car = regKey(v.car || v.registration) || main;
+  for (const r of [...Object.keys(counts), ...Object.keys(saved.vehicles)]) if (r && !saved.cars.includes(r)) saved.cars.push(r);
+}
+function currentCar() {
+  const c = store.get("porter.car");
+  return saved.cars.includes(c) ? c : saved.cars[0] || "";
+}
+const carVisits = () => saved.cars.length > 1 ? saved.visits.filter(v => v.car === currentCar()) : saved.visits;
+const noteCar = n => n.car || saved.visits.find(v => v.id === n.visitId)?.car || "";
+const carNotes = () => saved.cars.length > 1 ? saved.notes.filter(n => !noteCar(n) || noteCar(n) === currentCar()) : saved.notes;
+const carVehicle = () => saved.vehicles[currentCar()] || null;
+function addCar(reg, switchTo = true) {
+  const r = regKey(reg);
+  if (!r) return "";
+  if (!saved.cars.includes(r)) saved.cars.push(r);
+  if (switchTo) store.set("porter.car", r);
+  return r;
+}
 let persistAsked = false;
 function saveHistory() {
   store.set(HISTORY_KEY, JSON.stringify(saved));
@@ -2133,6 +2180,11 @@ function missingBox(v, onDone) {
 function saveVisit(doc) {
   const v = { id: newId(), savedAt: todayIso(), tidied: true };
   for (const k of VISIT_FIELDS) v[k] = doc[k];
+  // The registration on the paperwork decides the car; a new one becomes a
+  // new car (and is shown), a missing one means the car being looked at.
+  const was = currentCar(), r = regKey(doc.registration);
+  v.car = r || was;
+  if (v.car) { const isNew = !saved.cars.includes(v.car); addCar(v.car); otherCarNote = r && was && r !== was ? `This was for ${plateText(r)}${isNew ? ", a car new to Porter," : ""} so it's saved under that car, not ${plateText(was)}. If the plate was misread, open the job and choose the right car.` : ""; }
   saved.visits.push(v);
   saveHistory();
   lastVisitId = v.id;
@@ -2203,9 +2255,9 @@ const monthYear = d => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { m
 // The years the car has been on the road: from its first registration (DVLA,
 // a scanned V5C, or the age identifier on its plate) to this year.
 function firstYear(visits) {
-  const reg = saved.vehicle?.firstReg || visits.find(v => v.date_first_registered)?.date_first_registered;
+  const reg = carVehicle()?.firstReg || visits.find(v => v.date_first_registered)?.date_first_registered;
   if (reg && /^\d{4}/.test(reg)) return +reg.slice(0, 4);
-  const plate = (saved.vehicle?.registration || visits.find(v => v.registration)?.registration || "").replace(/\s/g, "").toUpperCase();
+  const plate = regKey(currentCar() || visits.find(v => v.registration)?.registration);
   const m = plate.match(/^[A-Z]{2}(\d{2})[A-Z]{3}$/);
   if (m) { const n = +m[1]; return 2000 + (n >= 50 ? n - 50 : n); }
   return null;
@@ -2269,11 +2321,11 @@ function renderOverview(visits) {
     tiles.push(b);
   }
   $("lastDone").replaceChildren(...tiles);
-  const today = todayIso(), car = saved.vehicle, soon = [];
+  const today = todayIso(), car = carVehicle(), soon = [];
   if (car?.motExpiryDate) soon.push([car.motExpiryDate, "📋 MOT due"]);
   else if (car?.motTestDueDate) soon.push([car.motTestDueDate, "📋 First MOT due"]);
   if (car?.taxDueDate) soon.push([car.taxDueDate, "🧾 Road tax due"]);
-  for (const n of saved.notes) for (const a of n.parsed.actions || []) if (a.due_date) soon.push([a.due_date, `🔧 ${a.action}${a.approximate ? " (approx.)" : ""}`]);
+  for (const n of carNotes()) for (const a of n.parsed.actions || []) if (a.due_date) soon.push([a.due_date, `🔧 ${a.action}${a.approximate ? " (approx.)" : ""}`]);
   const upcoming = soon.filter(([d]) => d >= today).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 5);
   $("comingUpPanel").hidden = !upcoming.length;
   $("comingUp").replaceChildren(el("ul", { className: "small", style: "margin:0;padding-left:18px" }, ...upcoming.map(([d, t]) => el("li", {}, `${t} · ${niceDate(d)}`))));
@@ -2321,6 +2373,12 @@ function visitEntry(v) {
       view.onclick = () => openKeptPages(v);
       actions.append(view);
     }
+    if (saved.cars.length > 1) {
+      const sel = el("select", { ariaLabel: "Which car this job was for", style: "width:auto;margin:0;font-size:13px;padding:4px" }, ...saved.cars.map(r => el("option", { value: r }, plateText(r))));
+      sel.value = v.car;
+      sel.onchange = () => { v.car = sel.value; for (const n of saved.notes) if (n.visitId === v.id) n.car = v.car; store.set("porter.car", v.car); openVisits.add(v.id); if (v.date) openYears.add(v.date.slice(0, 4)); saveHistory(); renderHistory(); setStatus(`Moved to ${plateText(v.car)}.`, "", $("historyStatus")); };
+      actions.append(el("label", { className: "small", style: "display:flex;gap:6px;align-items:center;margin:0;font-weight:500" }, "Car", sel));
+    }
     const del = el("button", { type: "button", className: "linkbtn small" }, "Delete this visit");
     del.onclick = () => {
       if (!confirm(`Delete the ${niceDate(v.date)} visit from your history?`)) return;
@@ -2351,10 +2409,27 @@ async function openKeptPages(v) {
   document.body.append(viewer);
 }
 
-var historySummary = "", openYears = new Set();   // var: renderHistory can run before this line on load
+var historySummary = "", openYears = new Set(), otherCarNote = "";
+// The car bar: its number plate, a switcher once there are two cars, and
+// "Add another car".
+function renderCarBar() {
+  const car = currentCar();
+  $("carPlate").hidden = !car;
+  $("carPlate").replaceChildren(el("span", {}, plateText(car)));
+  $("carSwitch").hidden = saved.cars.length < 2;
+  $("carSelect").replaceChildren(...saved.cars.map(r => {
+    const n = saved.visits.filter(v => v.car === r).length;
+    return el("option", { value: r }, `${plateText(r)} · ${n} job${n === 1 ? "" : "s"}`);
+  }));
+  $("carSelect").value = car;
+  const empty = saved.cars.length > 1 && !saved.visits.some(v => v.car === car);
+  $("removeCar").hidden = !empty;
+  $("removeCar").textContent = `Remove ${plateText(car)} (no jobs)`;
+}   // var: renderHistory can run before this line on load
 function renderHistory() {
-  const visits = [...saved.visits].sort(byDateDesc);
+  const visits = [...carVisits()].sort(byDateDesc);
   if (lastVisitId) openVisits.add(lastVisitId);
+  renderCarBar();
   // Timeline: visits by year (newest work first unless the owner chose
   // otherwise), with what each year cost, and a gap for every year since the
   // car was registered that has nothing yet.
@@ -2427,7 +2502,7 @@ $("historyEmpty").hidden = visits.length > 0;
 $("clearHistory").onclick = e => {
   e.preventDefault();
   if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
-  saved.visits = []; saved.notes = []; saved.feedback = []; delete saved.vehicle; lastVisitId = ""; saveHistory(); renderHistory(); renderDueDates();
+  saved.visits = []; saved.notes = []; saved.feedback = []; saved.cars = []; saved.vehicles = {}; store.del("porter.car"); lastVisitId = ""; saveHistory(); renderHistory(); renderDueDates();
   pageStore.clear();
   $("saleOut").hidden = true;
 };
@@ -2505,7 +2580,7 @@ $("adviceBtn").onclick = async () => {
       return;
     }
     parsed.actions.forEach(a => { a.include = !!a.due_date; });
-    saved.notes.push({ id: newId(), visitId: visit?.id || "", garage, ref, text, parsed });
+    saved.notes.push({ id: newId(), visitId: visit?.id || "", car: visit?.car || currentCar(), garage, ref, text, parsed });
     saveHistory(); renderHistory();
     $("adviceText").value = "";
     const dated = parsed.actions.filter(a => a.due_date).length;
@@ -2517,7 +2592,7 @@ $("adviceBtn").onclick = async () => {
 };
 
 function renderNotes() {
-  $("adviceList").replaceChildren(...[...saved.notes].reverse().map(noteBlock));
+  $("adviceList").replaceChildren(...[...carNotes()].reverse().map(noteBlock));
 }
 
 function noteBlock(n) {
@@ -2625,7 +2700,7 @@ function saleRecords() {
   return {
     today: todayIso(),
     costs_included: costs,
-    documents: [...saved.visits].sort(byDateDesc).map(v => ({
+    documents: [...carVisits()].sort(byDateDesc).map(v => ({
       date: v.date, type: v.doc_type, source: v.source === "dvsa" ? "DVSA MOT record" : "scanned document",
       garage: v.garage_name, mileage: v.mileage, work: v.work_items,
       parts: v.line_items.filter(l => l.category !== "labour").map(l => costs ? `${l.description} (£${l.line_total ?? "?"})` : l.description),
@@ -2656,12 +2731,12 @@ $("sellBtn").onclick = async () => {
   } catch (err) {
     setStatus("Failed: " + err.message + failHint(err), "error", status);
   } finally {
-    $("sellBtn").disabled = !saved.visits.length;
+    $("sellBtn").disabled = !carVisits().length;
   }
 };
 
 function vehicleFacts() {
-  const visits = [...saved.visits].sort(byDateDesc);
+  const visits = [...carVisits()].sort(byDateDesc);
   const first = k => visits.find(v => v[k])?.[k] || "";
   const withMiles = visits.filter(v => v.mileage != null).sort((a, b) => b.mileage - a.mileage)[0];
   return { make_model: first("make_model"), registration: first("registration"), vin: first("vin"),
@@ -2883,6 +2958,24 @@ const openPanel = id => { if ($(id).classList.contains("shut")) $(id).querySelec
     head.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(e); } });
   }
 })();
+$("carSelect").onchange = e => { store.set("porter.car", e.target.value); openYears.clear(); lastVisitId = ""; renderHistory(); renderDueDates(); scrollTo({ top: 0 }); };
+$("removeCar").onclick = e => {
+  e.preventDefault();
+  const car = currentCar();
+  if (saved.visits.some(v => v.car === car)) return;
+  saved.cars = saved.cars.filter(r => r !== car); delete saved.vehicles[car];
+  store.set("porter.car", saved.cars[0] || ""); saveHistory(); openYears.clear(); renderHistory(); renderDueDates();
+  setStatus(`Removed ${plateText(car)}.`, "", $("historyStatus"));
+};
+$("addCar").onclick = e => {
+  e.preventDefault();
+  const r = regKey(prompt("Registration of the other car (e.g. AB12 CDE)?") || "");
+  if (!r) return;
+  if (!/^[A-Z0-9]{2,8}$/.test(r)) { setStatus("That doesn't look like a registration.", "error", $("historyStatus")); return; }
+  addCar(r); saveHistory(); openYears.clear(); lastVisitId = "";
+  renderHistory(); renderDueDates(); scrollTo({ top: 0 });
+  setStatus(`Now showing ${plateText(r)}. Add its paperwork, or switch back with the menu under the plate.`, "", $("historyStatus"));
+};
 $("historySort").onchange = e => { store.set("porter.sort", e.target.value); renderHistory(); };
 $("firstAdd").onclick = () => { showTab("scan"); scrollTo({ top: 0 }); };
 
@@ -2979,7 +3072,7 @@ function layoutRows(rows) {
   return pages;
 }
 function summaryRows(visits, folders) {
-  const car = saved.vehicle, reg = car?.registration || visits.find(v => v.registration)?.registration || "";
+  const car = carVehicle(), reg = currentCar() || regKey(visits.find(v => v.registration)?.registration);
   const model = visits.find(v => v.make_model)?.make_model || car?.make || "";
   const rows = [{ t: `Service history${reg ? " · " + reg : ""}`, size: 20, bold: true }, ...(model ? [{ t: model, size: 12 }] : []),
     { t: `Exported from Porter on ${niceDate(todayIso())}. Personal details are redacted.`, size: 9, gray: true }, { rule: true }];
@@ -3029,17 +3122,17 @@ function summaryRows(visits, folders) {
     }
     if (!v.line_items.length && v.work_items.length) for (const l of wrapText(v.work_items.join("; "), 80)) rows.push({ t: l, size: 9, indent: 1 });
     for (const a of v.advisories) for (const l of wrapText("Advisory: " + a, 80)) rows.push({ t: l, size: 9, indent: 1 });
-    for (const n of saved.notes.filter(n => n.visitId === v.id)) for (const l of wrapText("Mechanic said: " + n.parsed.summary, 80)) rows.push({ t: l, size: 9, indent: 1 });
+    for (const n of carNotes().filter(n => n.visitId === v.id)) for (const l of wrapText("Mechanic said: " + n.parsed.summary, 80)) rows.push({ t: l, size: 9, indent: 1 });
     if (folders.get(v.id)) rows.push({ t: `Paperwork: folder "${folders.get(v.id).name}" (${folders.get(v.id).count} page${folders.get(v.id).count === 1 ? "" : "s"})`, size: 9, indent: 1, gray: true });
   }
-  const loose = saved.notes.filter(n => !n.visitId);
+  const loose = carNotes().filter(n => !n.visitId);
   if (loose.length) { section("Mechanic's advice"); for (const n of loose) for (const l of wrapText(`${n.ref}: ${n.parsed.summary}`, 85)) rows.push({ t: l, size: 9 }); }
   return { rows, reg };
 }
 // The export is one zip: the summary PDF, and a folder for each visit with
 // its redacted pages, named by date and garage so they sort in order.
 async function exportSet() {
-  const visits = [...saved.visits].sort(byDateDesc), folders = new Map(), entries = [];
+  const visits = [...carVisits()].sort(byDateDesc), folders = new Map(), entries = [];
   const safe = t => String(t).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
   for (const v of visits) {
     const kept = v.keptPages ? await pageStore.get(v.id) || [] : [];
@@ -3108,7 +3201,7 @@ async function driveUpload(name, data, type, parent) {
   return driveCall("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", { method: "POST", body: form });
 }
 $("driveBtn").onclick = async () => {
-  if (!saved.visits.length) { setStatus("Nothing to save yet: add a document first.", "error", $("historyStatus")); return; }
+  if (!carVisits().length) { setStatus("Nothing to save yet: add a document first.", "error", $("historyStatus")); return; }
   if (!googleClientId()) { $("driveSetup").open = true; $("driveSetup").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
   $("driveBtn").disabled = true;
   try {
@@ -3151,7 +3244,7 @@ function makeZip(entries) {   // [{ name, data: Uint8Array }]
   return new Blob([...parts, ...central, new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(entries.length), ...u16(entries.length), ...u32(size), ...u32(offset), ...u16(0)])], { type: "application/zip" });
 }
 $("exportBtn").onclick = async () => {
-  if (!saved.visits.length) { setStatus("Nothing to export yet: add a document first.", "error", $("historyStatus")); return; }
+  if (!carVisits().length) { setStatus("Nothing to export yet: add a document first.", "error", $("historyStatus")); return; }
   $("exportBtn").disabled = true;
   setStatus("Making the zip…", "busy", $("historyStatus"));
   try {
@@ -3164,7 +3257,7 @@ $("exportBtn").onclick = async () => {
       catch (err) { if (err.name === "AbortError") { setStatus("", "", $("historyStatus")); return; } }
     }
     if (!shared) { const url = URL.createObjectURL(file); el("a", { href: url, download: file.name }).click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-    const missing = saved.visits.filter(v => !v.keptPages && v.source !== "dvsa").length;
+    const missing = carVisits().filter(v => !v.keptPages && v.source !== "dvsa").length;
     setStatus(`${shared ? "Shared" : "Downloaded"} "${file.name}": the service history PDF and ${folders} visit folder${folders === 1 ? "" : "s"} with ${n} page${n === 1 ? "" : "s"}, for ${visits} visit${visits === 1 ? "" : "s"}.` +
       (shared ? "" : " To put it in Drive, Dropbox or OneDrive, open your Downloads (or the download notice) and share it to that app.") +
       (missing ? ` ${missing} older visit${missing === 1 ? " has" : "s have"} no kept pages, so ${missing === 1 ? "it's" : "they're"} in the PDF only.` : ""), "", $("historyStatus"));
@@ -3209,7 +3302,10 @@ $("restoreFile").onchange = async e => {
     const seen = new Set(saved.feedback.map(f => f.at));
     saved.visits.push(...visits);
     saved.notes.push(...notes);
-    if (!saved.vehicle && b.history.vehicle) saved.vehicle = b.history.vehicle;
+    if (b.history.vehicle?.registration) saved.vehicles[regKey(b.history.vehicle.registration)] ||= b.history.vehicle;
+    for (const [r, veh] of Object.entries(b.history.vehicles || {})) saved.vehicles[r] ||= veh;
+    for (const v of visits) { v.car = regKey(v.car || v.registration) || currentCar(); addCar(v.car, false); }
+    for (const r of b.history.cars || []) addCar(r, false);
     saved.feedback.push(...(b.history.feedback || []).filter(f => !seen.has(f.at)));
     saveHistory(); renderHistory(); renderDueDates();
     setStatus(`Restored ${visits.length} document${visits.length === 1 ? "" : "s"} and ${notes.length} note${notes.length === 1 ? "" : "s"}` +
@@ -3231,7 +3327,7 @@ function importMot(vehicle) {
     if (t.motTestNumber && have.has(t.motTestNumber)) continue;
     const miles = parseInt(t.odometerValue, 10);
     saved.visits.push({
-      id: newId(), savedAt: todayIso(), source: "dvsa", mot_test_number: t.motTestNumber || "",
+      id: newId(), savedAt: todayIso(), source: "dvsa", car: regKey(vehicle.registration) || currentCar(), mot_test_number: t.motTestNumber || "",
       doc_type: "mot_certificate", registration: vehicle.registration || "", vin: "",
       make_model: [vehicle.make, vehicle.model].filter(Boolean).join(" "),
       date_first_registered: (vehicle.firstUsedDate || vehicle.registrationDate || "").slice(0, 10),
@@ -3263,7 +3359,7 @@ $("motBtn").onclick = async () => {
     const mot = d.mot?.vehicle, dvla = d.dvla?.vehicle;
     const added = importMot(mot);
     if (dvla || mot) {
-      saved.vehicle = { registration: d.registration, checkedAt: todayIso(),
+      saved.vehicles[addCar(d.registration)] = { registration: d.registration, checkedAt: todayIso(),
         make: dvla?.make || mot?.make || "", colour: dvla?.colour || mot?.primaryColour || "",
         taxStatus: dvla?.taxStatus || "", taxDueDate: dvla?.taxDueDate || "",
         motStatus: dvla?.motStatus || "", motExpiryDate: dvla?.motExpiryDate || "", motTestDueDate: mot?.motTestDueDate || "",
@@ -3282,7 +3378,7 @@ $("motBtn").onclick = async () => {
 };
 
 function renderDueDates() {
-  const v = saved.vehicle;
+  const v = carVehicle();
   if (!v) { $("dueDates").replaceChildren(); return; }
   const item = (label, text, date, title) => {
     const row = el("div", { className: "reminder", style: "grid-template-columns:1fr auto;align-items:center" },
