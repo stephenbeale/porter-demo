@@ -682,7 +682,7 @@ async function addFiles(fileList) {
   const files = [...fileList].filter(f => !f.type || f.type.startsWith("image/"));
   if (!files.length) return;
   $("scanBtn").disabled = $("clearBtn").disabled = true;
-  const failed = [];
+  const failed = [], before = pages.length;
   for (const [n, f] of files.entries()) {
     setStatus(files.length > 1 ? `Adding photo ${n + 1} of ${files.length}…` : "Adding photo…", "busy");
     try {
@@ -698,6 +698,7 @@ async function addFiles(fileList) {
   if (failed.length) setStatus(`Couldn't open ${failed.length} of ${files.length} photo${files.length > 1 ? "s" : ""}` +
     ` (${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}). If they're in Google Photos, download them to the phone first. ${ready}`, "error");
   else if (ready) setStatus(ready);
+  queueStraighten(pages.slice(before));
 }
 
 // capture="environment" only opens the camera on phones; desktop browsers
@@ -750,6 +751,7 @@ function stopRun() {
 }
 function resetPages() {
   stopRun();
+  straightenGen++; straightenQueue = Promise.resolve();
   closeWebcam();
   pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
@@ -811,10 +813,10 @@ function scaledCopy(src, maxEdge) {
   c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
   return c;
 }
-async function recognizeUpright(worker, src, say = () => {}) {
+async function recognizeUpright(worker, src, say = () => {}, straightened = false) {
   const read = async c => (await worker.recognize(c, {}, { blocks: true })).data;
   const first = await read(src);
-  if (goodWords(first) >= 12) return { data: first, rot: 0 };
+  if (straightened || goodWords(first) >= 12) return { data: first, rot: 0 };
   const small = scaledCopy(src, 1000);
   say("hard to read, checking if it's sideways (1 of 4)");
   let best = { rot: 0, score: goodWords(await read(small)) };
@@ -827,6 +829,31 @@ async function recognizeUpright(worker, src, say = () => {}) {
   say("turned it upright, reading it again");
   return { data: await read(rotated(src, best.rot)), rot: best.rot };
 }
+// Pages are straightened as soon as they're added, while the owner is still
+// looking through them: a quick read of a small copy each way up, and a
+// sideways page is turned upright in the strip. Process waits for this.
+let straightenQueue = Promise.resolve(), straightenGen = 0;
+async function straighten(p, gen) {
+  if (p.straightened || gen !== straightenGen) return;
+  try {
+    const worker = await getOcr();
+    const small = scaledCopy(p.small, 1000);
+    const score = async c => gen === straightenGen ? goodWords((await worker.recognize(c, {}, { blocks: true })).data) : 0;
+    let best = { rot: 0, score: await score(small) };
+    if (best.score < 8) for (const rot of [90, 270, 180]) {
+      const sc = await score(rotated(small, rot));
+      if (sc > best.score * 1.5 + 3) best = { rot, score: sc };
+    }
+    if (gen !== straightenGen || !pages.includes(p)) return;
+    if (best.rot) { p.small = p.full = rotated(p.small, best.rot); renderPages(); }
+    p.straightened = true;
+  } catch {}   // Process does the full check if this couldn't
+}
+function queueStraighten(added) {
+  const gen = straightenGen;
+  for (const p of added) straightenQueue = straightenQueue.then(() => straighten(p, gen));
+}
+
 // A page that takes too long is skipped (the owner covers it by hand) and the
 // worker is restarted, since a stuck job can't be cancelled any other way.
 // Phones freeze a page's code while the screen is off or another app is in
@@ -1017,6 +1044,9 @@ $("scanBtn").onclick = async () => {
   processing = true; $("thumbs").classList.add("busy"); setRemoveLabel();
   setStatus("Loading the on-phone checks (about 14 MB, first time only). Keep this screen open: phones pause web pages when locked.", "busy");
   pages.forEach((p, i) => markThumb(i, "waiting", "Waiting"));
+  setStatus("Getting your pages ready…", "busy");
+  await orStop(straightenQueue).catch(() => {});
+  if (!live()) return;
   stayAwake(true); pausedNote = "";
   const detector = getPeopleDetector().catch(err => { peopleFailed = err; return null; });
   const skipped = [];
@@ -1025,22 +1055,22 @@ $("scanBtn").onclick = async () => {
       const worker = await orStop(getOcr());
       if (!live()) return;
       let step = "Reading";
-      markThumb(i, "busy", "Reading…");
-      const say = what => { step = what; markThumb(i, "busy", "Turning…"); setStatus(`Page ${i + 1} of ${pages.length}: ${what}…`, "busy"); };
+      markThumb(i, "busy", "Processing…");
+      const say = what => { step = what; markThumb(i, "busy", "Processing…"); setStatus(`${pausedNote}Processing page ${i + 1} of ${pages.length}…`, "busy"); };
       ocrProgress = m => {
         if (m.status !== "recognizing text" || step !== "Reading") return;
-        markThumb(i, "busy", `Reading ${Math.round(m.progress * 100)}%`);
-        setStatus(`${pausedNote}Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
+        markThumb(i, "busy", `Processing ${Math.round(m.progress * 100)}%`);
+        setStatus(`${pausedNote}Processing page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
       };
       try {
-        const { data, rot } = await orStop(withTimeout(recognizeUpright(worker, p.small, say), OCR_PAGE_TIMEOUT_MS));
+        const { data, rot } = await orStop(withTimeout(recognizeUpright(worker, p.small, say, p.straightened), OCR_PAGE_TIMEOUT_MS));
         if (!live()) return;
         if (rot) { p.small = p.full = rotated(p.small, rot); turned = true; }
         p.local = findPersonalData(data, i + 1);
         p.ocrText = data.text || "";
         p.textPx = smallPrintPx(data);
         p.unchecked = false;
-        markThumb(i, "waiting", "Read");
+        markThumb(i, "done", "✓");
       } catch (err) {
         if (!live()) return;
         if (err.message !== "timeout") throw err;
@@ -1062,8 +1092,7 @@ $("scanBtn").onclick = async () => {
   if (!live()) return;
   if (h) {
     for (const [i, p] of pages.entries()) {
-      setStatus(`Checking for photos of people… page ${i + 1} of ${pages.length}`, "busy");
-      markThumb(i, "busy", "Checking…");
+      setStatus(`${pausedNote}Processing page ${i + 1} of ${pages.length}…`, "busy");
       try { p.person = personIn(await orStop(h.detect(p.small))); } catch (err) { if (!live()) return; peopleFailed = err; }
       if (!live()) return;
       markThumb(i, "done", "✓");
