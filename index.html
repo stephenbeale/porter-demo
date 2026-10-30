@@ -90,6 +90,11 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 #checkCanvases canvas { touch-action: pan-y; cursor: pointer; }
 #checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
 .ask { border: 2px solid var(--warn); border-radius: 12px; padding: 12px; margin: 0 0 12px; }
+.navtabs { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 10px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0; }
+.navtab { flex: 1 0 auto; padding: 9px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
+.navtab[aria-current=page] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+section[data-tab].off-tab { display: none !important; }
+details > summary { font-weight: 600; }
 .feedback { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
 .sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
 .sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
@@ -123,6 +128,13 @@ label.check input { width: 20px; height: 20px; margin: 0; }
   </h1>
   <p class="muted small">Scan a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
 
+  <nav class="navtabs" id="mainTabs" aria-label="Sections">
+    <button class="navtab" type="button" data-tab="scan" aria-current="page">Scan</button>
+    <button class="navtab" type="button" data-tab="notes">Mechanic's notes</button>
+    <button class="navtab" type="button" data-tab="history">History</button>
+    <button class="navtab" type="button" data-tab="sell">Sell</button>
+  </nav>
+
   <section class="card" id="installTip" hidden>
     <h2>Add Porter to your Home Screen</h2>
     <p class="small">On iPhone, tap Share <span aria-hidden="true">⬆</span> then <b>Add to Home Screen</b>, and open Porter from there. Safari deletes a website's saved data after 7 days without a visit; Home Screen apps keep theirs.</p>
@@ -154,7 +166,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     </select>
   </section>
 
-  <section class="card">
+  <section class="card" id="addCard" data-tab="scan">
     <h2>Add pages of one document</h2>
     <div class="row">
       <button class="btn" id="cameraBtn" type="button">📷 Take photo</button>
@@ -182,7 +194,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
 
-  <section class="card" id="deviceCheck" hidden>
+  <section class="card" id="deviceCheck" data-tab="scan" hidden>
     <h2>Check before sending</h2>
     <div class="ask" id="blockedAsk" hidden>
       <p style="margin:0 0 10px"><b id="blockedText"></b></p>
@@ -205,12 +217,13 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <p class="muted small" id="checkSummary"></p>
     <div class="row">
       <button class="btn" id="sendBtn" type="button">Send blacked-out pages</button>
-      <button class="btn secondary" id="backBtn" type="button">Back</button>
+      <button class="btn secondary" id="backBtn" type="button">Back to photos</button>
     </div>
+    <div class="row" style="margin-top:8px"><button class="btn secondary" id="cancelBtn" type="button">Cancel</button></div>
     <div class="status" id="checkStatus" role="status" aria-live="polite"></div>
   </section>
 
-  <section id="results" hidden>
+  <section id="results" data-tab="scan" hidden>
     <section class="card ask" id="saveAsk" hidden>
       <p style="margin:0 0 10px"><b id="saveAskText"></b> Save it to your car's history anyway?</p>
       <div class="row">
@@ -218,33 +231,10 @@ label.check input { width: 20px; height: 20px; margin: 0; }
         <button class="btn secondary" id="dontSave" type="button">Don't save</button>
       </div>
     </section>
-    <section class="card">
-      <h2>Redaction</h2>
-      <div class="tabs" role="tablist">
-        <button class="tab" role="tab" aria-selected="true" data-view="review">Review boxes</button>
-        <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer sees</button>
-      </div>
-      <div id="canvases"></div>
-      <p class="muted small note">Red boxes were blacked out on your phone before sending. Purple boxes are personal details AI spotted in what was sent (your phone missed them, so AI saw them); they're covered now for sharing. Orange boxes match personal data from this or an earlier scan, such as the end of a phone number peeking out from under a receipt. Check every page before sharing.</p>
-      <ul class="pii small" id="piiList"></ul>
-      <div class="row">
-        <button class="btn secondary" id="downloadBtn" type="button">⬇ Save redacted page(s)</button>
-        <button class="btn secondary" id="keepBtn" type="button">📎 Keep for selling</button>
-      </div>
-      <p class="muted small" id="keepNote">Checked the boxes? Keep a redacted copy with this visit so Selling mode can attach it for buyers.</p>
-      <div class="feedback" id="fbBox">
-        <p style="font-weight:600;margin:0 0 8px">Were all your personal details covered?</p>
-        <div class="row">
-          <button class="btn secondary" id="fbYes" type="button">👍 Yes, all covered</button>
-          <button class="btn secondary" id="fbNo" type="button">Missed something</button>
-        </div>
-        <div id="fbMore" hidden>
-          <label for="fbComment">What was missed? (optional, don't type the personal details themselves)</label>
-          <textarea id="fbComment" rows="2" placeholder="e.g. my phone number on the back page"></textarea>
-          <div class="row" style="margin-top:8px"><button class="btn" id="fbSend" type="button">Send</button></div>
-        </div>
-        <p class="small muted" id="fbThanks" hidden></p>
-      </div>
+    <section class="card" id="resultCard">
+      <h2 id="resultTitle">Saved to your history</h2>
+      <div class="status" id="resultStatus" role="status" aria-live="polite"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="doneBtn" type="button">Done: scan another document</button></div>
     </section>
     <section class="card">
       <h2>Details</h2>
@@ -259,6 +249,38 @@ label.check input { width: 20px; height: 20px; margin: 0; }
       <div id="condition"></div>
     </section>
     <section class="card">
+      <details id="redactionBox"><summary>Blacked-out pages</summary>
+      <div class="tabs" role="tablist" style="margin-top:10px">
+        <button class="tab" role="tab" aria-selected="true" data-view="review">Show the boxes</button>
+        <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer would see</button>
+      </div>
+      <div id="canvases"></div>
+      <details class="small"><summary>What do the box colours mean?</summary>
+        <p class="muted small"><b>Red:</b> blacked out on your phone before sending. <b>Purple:</b> personal details your phone missed, so they were sent, and AI found them; they're covered now. <b>Orange:</b> numbers matching your details from another scan, such as the end of a phone number showing under a receipt.</p>
+      </details>
+      <ul class="pii small" id="piiList" hidden></ul>
+      <div class="row">
+        <button class="btn secondary" id="downloadBtn" type="button">⬇ Download blacked-out copy</button>
+        <button class="btn secondary" id="keepBtn" type="button">📎 Keep a copy for selling</button>
+      </div>
+      <p class="muted small" id="keepNote">"Keep a copy" stores the blacked-out pages in Porter, on this phone, so Sell can show them to a buyer later.</p>
+      </details>
+      <div class="feedback" id="fbBox">
+        <p style="font-weight:600;margin:0 0 4px">Help improve Porter: did the black boxes cover all your personal details?</p>
+        <p class="muted small" style="margin:0 0 8px">Look through the blacked-out pages above. Only your answer is kept, never the pages; it shows how well the phone's check works.</p>
+        <div class="row">
+          <button class="btn secondary" id="fbYes" type="button">👍 Yes, all covered</button>
+          <button class="btn secondary" id="fbNo" type="button">Something was missed</button>
+        </div>
+        <div id="fbMore" hidden>
+          <label for="fbComment">What was missed? (optional; describe it, don't type the details themselves)</label>
+          <textarea id="fbComment" rows="2" placeholder="e.g. my name and address on page 2"></textarea>
+          <div class="row" style="margin-top:8px"><button class="btn" id="fbSend" type="button">Send</button></div>
+        </div>
+        <p class="small muted" id="fbThanks" hidden></p>
+      </div>
+    </section>
+    <section class="card">
       <details><summary>Notes &amp; raw data</summary>
         <p id="notes" class="small"></p>
         <p id="usage" class="small muted"></p>
@@ -267,18 +289,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     </section>
   </section>
 
-  <section class="card" id="motCard">
-    <h2>Or import your MOT history</h2>
-    <p class="muted small">Every MOT test on record for your car, with mileage, advisories and failures, from DVSA. Plus road tax and MOT due dates from DVLA.</p>
-    <label for="motReg">Registration</label>
-    <input id="motReg" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AB12 CDE">
-    <div class="row" style="margin-top:10px"><button class="btn" id="motBtn" type="button">Import</button></div>
-    <p class="muted small" id="motNeedsServer" hidden>Needs an invite code: MOT lookups go through Porter's beta server.</p>
-    <div class="status" id="motStatus" role="status" aria-live="polite"></div>
-    <div id="dueDates"></div>
-  </section>
-
-  <section class="card" id="adviceCard">
+  <section class="card" id="adviceCard" data-tab="notes">
     <h2>What did the mechanic say?</h2>
     <p class="muted small">Advice they gave you out loud but didn't write down, e.g. "your tyres will want doing by mid-November". AI picks out what to do and when, and suggests reminders.</p>
     <label for="adviceVisit">From which visit?</label>
@@ -299,7 +310,7 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <div id="adviceList"></div>
   </section>
 
-  <section class="card" id="historyCard">
+  <section class="card" id="historyCard" data-tab="history">
     <h2>Your car's history</h2>
     <p class="muted small">Saved in this browser only, so it builds up as you scan. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
     <table><tbody id="historyRows"></tbody></table>
@@ -314,7 +325,18 @@ label.check input { width: 20px; height: 20px; margin: 0; }
     <div class="status" id="historyStatus" role="status" aria-live="polite"></div>
   </section>
 
-  <section class="card" id="sellCard">
+  <section class="card" id="motCard" data-tab="history">
+    <h2>Import your MOT history</h2>
+    <p class="muted small">Every MOT test on record for your car, with mileage, advisories and failures, from DVSA. Plus road tax and MOT due dates from DVLA.</p>
+    <label for="motReg">Registration</label>
+    <input id="motReg" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AB12 CDE">
+    <div class="row" style="margin-top:10px"><button class="btn" id="motBtn" type="button">Import</button></div>
+    <p class="muted small" id="motNeedsServer" hidden>Needs an invite code: MOT lookups go through Porter's beta server.</p>
+    <div class="status" id="motStatus" role="status" aria-live="polite"></div>
+    <div id="dueDates"></div>
+  </section>
+
+  <section class="card" id="sellCard" data-tab="sell">
     <h2>Selling mode</h2>
     <p class="muted small">Turn your saved history into a sale-ready summary for buyers: the service record, recent work, selling points and an honest list of known issues.</p>
     <label class="check"><input type="checkbox" id="sellReg" checked> Show registration (buyers use it for history checks)</label>
@@ -558,7 +580,7 @@ function renderPages() {
   $("thumbHint").hidden = !pages.length;
   requestAnimationFrame(updateThumbNav);
   $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
-  $("clearBtn").textContent = pages.length > 1 ? "Remove all" : "Remove";
+  setRemoveLabel();
 }
 // Progress shown on the pages themselves while they're checked: waiting
 // (dimmed), busy ("Reading 45%"), done (a tick). Kept on the page object so
@@ -591,6 +613,8 @@ $("thumbSlider").addEventListener("input", e => {
   const strip = $("thumbs");
   strip.scrollLeft = e.target.value / 1000 * (strip.scrollWidth - strip.clientWidth);
 });
+
+function setRemoveLabel() { $("clearBtn").textContent = processing ? "Cancel" : pages.length > 1 ? "Remove all" : "Remove"; }
 
 // Full-size look at a page, to check it's the right one before processing.
 function openViewer(i) {
@@ -690,14 +714,14 @@ function stopRun() {
     cancelRun();
     ocrWorker?.terminate?.(); ocrWorker = null;
     ocrProgress = () => {};
-    processing = false; $("thumbs").classList.remove("busy");
+    processing = false; $("thumbs").classList.remove("busy"); setRemoveLabel();
   }
   stayAwake(false);
 }
 function resetPages() {
   stopRun();
   closeWebcam();
-  pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true;
+  pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
   $("scanBtn").disabled = false;
   renderPages(); setStatus("");
@@ -940,7 +964,7 @@ $("scanBtn").onclick = async () => {
   const stopped = new Promise((_, rej) => { cancelRun = () => rej(new Error("cancelled")); });
   stopped.catch(() => {});
   const orStop = promise => Promise.race([promise, stopped]);
-  processing = true; $("thumbs").classList.add("busy");
+  processing = true; $("thumbs").classList.add("busy"); setRemoveLabel();
   setStatus("Loading the on-phone checks (about 14 MB, first time only). Keep this screen open: phones pause web pages when locked.", "busy");
   pages.forEach((p, i) => markThumb(i, "waiting", "Waiting"));
   stayAwake(true); pausedNote = "";
@@ -996,7 +1020,7 @@ $("scanBtn").onclick = async () => {
     }
   }
   $("scanBtn").disabled = pages.length === 0;
-  processing = false; $("thumbs").classList.remove("busy");
+  processing = false; $("thumbs").classList.remove("busy"); setRemoveLabel();
   stayAwake(false);
   pages.forEach((p, i) => markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓"));
   setStatus("");
@@ -1086,9 +1110,14 @@ function setDrawing(on) {
   $("checkCanvases").classList.toggle("drawing", on);
 }
 $("drawBtn").onclick = () => setDrawing(!drawing);
-$("saveAnyway").onclick = () => { saveVisit(result); $("saveAsk").hidden = true; setStatus("Saved to your history."); };
-$("dontSave").onclick = () => { $("saveAsk").hidden = true; setStatus("Not saved to your history."); };
-$("backBtn").onclick = () => { $("deviceCheck").hidden = true; setDrawing(false); };
+$("saveAnyway").onclick = () => { saveVisit(result); $("saveAsk").hidden = true; $("resultTitle").textContent = "Saved to your history"; };
+$("dontSave").onclick = () => { $("saveAsk").hidden = true; $("resultTitle").textContent = "Not saved"; };
+$("backBtn").onclick = () => { $("deviceCheck").hidden = true; $("addCard").hidden = false; setDrawing(false); scrollTo({ top: 0 }); };
+$("cancelBtn").onclick = () => {
+  if (!confirm(`Cancel and remove ${pages.length > 1 ? `these ${pages.length} pages` : "this page"}? Nothing will be saved.`)) return;
+  resetPages(); setStatus("Cancelled. Nothing was saved."); scrollTo({ top: 0 });
+};
+$("doneBtn").onclick = () => { resetPages(); scrollTo({ top: 0 }); };
 
 function paintCheck(c, p, draft) {
   const ctx = c.getContext("2d");
@@ -1122,6 +1151,7 @@ function checkSummary() {
 }
 
 function showDeviceCheck() {
+  $("addCard").hidden = true;
   $("checkCanvases").replaceChildren(...pages.map((p, i) => {
     const c = el("canvas", { width: p.small.width, height: p.small.height, ariaLabel: `Page ${i + 1}` });
     paintCheck(c, p);
@@ -1260,11 +1290,13 @@ $("sendBtn").onclick = async () => {
     $("saveAsk").hidden = !askFirst;
     if (askFirst) $("saveAskText").textContent = `This looks like ${result.looks_like || "something that isn't about a car"}, not a car document.`;
     else saveVisit(result);
+    $("resultTitle").textContent = askFirst ? "Read, not saved yet" : "Saved to your history";
     setStatus(aiFound
-      ? `Done, but AI spotted ${aiFound} personal detail${aiFound === 1 ? "" : "s"} your phone missed (purple boxes). They were in what was sent; they're covered now for sharing. ~$${usd.toFixed(3)}.`
-      : `Done: your phone covered everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. ~$${usd.toFixed(3)}.${askFirst ? "" : " Saved to your history."}`,
-      aiFound ? "error" : "");
-    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+      ? `Your phone missed ${aiFound} personal detail${aiFound === 1 ? "" : "s"} (purple boxes under "Blacked-out pages"), so ${aiFound === 1 ? "it was" : "they were"} included in what was sent to AI. ${aiFound === 1 ? "It's" : "They're"} covered now in anything you keep or share. Cost about $${usd.toFixed(2)}.`
+      : `Your phone blacked out everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. Cost about $${usd.toFixed(2)}.`,
+      aiFound ? "error" : "", $("resultStatus"));
+    $("redactionBox").open = aiFound > 0;
+    scrollTo({ top: 0 });
   } catch (err) {
     setStatus("Failed: " + err.message + failHint(err), "error", status);
   } finally {
@@ -1348,6 +1380,7 @@ function addField(dl, label, value) {
 function render() {
   const r = result;
   $("results").hidden = false;
+  $("addCard").hidden = true;
   $("fbMore").hidden = $("fbThanks").hidden = true;
   $("fbYes").disabled = $("fbNo").disabled = false;
   $("fbComment").value = "";
@@ -2008,6 +2041,15 @@ const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform ==
 const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 $("installTip").hidden = !ios || standalone || store.get("porter.installTipDone") === "1";
 $("installDismiss").onclick = () => { store.set("porter.installTipDone", "1"); $("installTip").hidden = true; };
+
+// One section at a time: Scan, Mechanic's notes, History, Sell.
+function showTab(name) {
+  document.querySelectorAll("section[data-tab]").forEach(sec => sec.classList.toggle("off-tab", sec.dataset.tab !== name));
+  document.querySelectorAll(".navtab").forEach(b => b.dataset.tab === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  store.set("porter.tab", name);
+}
+document.querySelectorAll(".navtab").forEach(b => b.onclick = () => { showTab(b.dataset.tab); scrollTo({ top: 0 }); });
+showTab(["scan", "notes", "history", "sell"].includes(store.get("porter.tab")) ? store.get("porter.tab") : "scan");
 
 showMode();
 showConnect();
