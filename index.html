@@ -95,6 +95,27 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 .navtab[aria-current=page] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 section[data-tab].off-tab { display: none !important; }
 details > summary { font-weight: 600; }
+.visit { border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 14px 0; }
+.visit.new { border-left-color: var(--good); }
+.visit-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; padding: 0;
+  border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.visit-title { display: block; color: var(--text-2); font-size: .9em; }
+.badge-new { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 99px; background: var(--good); color: #fff; font-size: .75em; font-weight: 700; vertical-align: 1px; }
+.toggle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); font-size: 18px; transition: background .15s, color .15s; }
+.toggle svg, .tile-chev svg { transition: transform .2s; }
+[aria-expanded=true] > .toggle { background: var(--accent); color: var(--accent-text); }
+[aria-expanded=true] > .toggle svg, .tile[aria-expanded=true] .tile-chev svg { transform: rotate(180deg); }
+.tile-chev { display: inline-flex; vertical-align: -2px; margin-left: 4px; color: var(--accent); font-size: 15px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 8px; margin: 10px 0; }
+.tile { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 10px; border-radius: 10px; text-align: left;
+  border: 1px solid var(--rule); background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+.tile[aria-expanded=true] { border-color: var(--accent); }
+.tile-icon { font-size: 1.3em; line-height: 1; }
+.tile-label { display: block; font-weight: 600; font-size: .92em; }
+.tile-panel { grid-column: 1 / -1; margin: 0; }
+.visit .items { margin: 8px 0; }
+.visit .items td { padding: 4px 0; }
 .feedback { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
 .sale { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 14px; background: var(--bg); }
 .sale h4 { margin: 16px 0 6px; } .sale ul { margin: 0; padding-left: 20px; }
@@ -311,9 +332,18 @@ details > summary { font-weight: 600; }
   </section>
 
   <section class="card" id="historyCard" data-tab="history">
+    <div class="ask" id="justAdded" hidden>
+      <p style="margin:0 0 6px"><b>Just added</b></p>
+      <p class="small" id="justAddedText" style="margin:0 0 10px"></p>
+      <div class="row">
+        <button class="btn secondary" id="seeRedaction" type="button">Check blacked-out pages</button>
+        <button class="btn secondary" id="scanAnother" type="button">Scan another</button>
+      </div>
+    </div>
     <h2>Your car's history</h2>
-    <p class="muted small">Saved in this browser only, so it builds up as you scan. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
-    <table><tbody id="historyRows"></tbody></table>
+    <p class="small" id="historyStats"></p>
+    <div id="historyList"></div>
+    <p class="muted small">Saved on this phone only. Names, addresses and other personal data from the scans are never saved. <a href="#" id="clearHistory">Delete all</a></p>
     <p class="small muted" id="historyEmpty">No documents saved yet.</p>
     <div class="row" style="margin-top:12px">
       <button class="btn secondary" id="backupBtn" type="button">⬇ Back up</button>
@@ -835,9 +865,12 @@ const luhn = d => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = +d
 
 // Personal-data boxes from Tesseract's lines, in the image's pixel space.
 // Over-boxing is the safe failure: the owner uncovers anything that's fine.
-// The garage's own details (name, address, phone, website) are fine to send,
-// and Claude needs them. Anything near words like these starts uncovered.
-const BUSINESS = /\b(ltd|limited|plc|llp|motors?|motor services|garage|autos?|automotive|tyres?|services|centre|center|engineering|repairs?|mot testing|vat\s*(no|reg)|reg(istered)?\s*(no|office)|company\s*(no|reg))\b|www\.|https?:/i;
+// The garage's own details (name, address, phone, email, website) are a
+// business's, not the owner's: Claude needs them, so they're never boxed.
+// Anything on or next to a line with words like these counts as business.
+// Personal email providers; an address at any other domain is a company's.
+const PERSONAL_EMAIL = /@(gmail|googlemail|hotmail|outlook|live|msn|yahoo|ymail|icloud|me|mac|aol|btinternet|btopenworld|sky|virginmedia|talktalk|ntlworld|protonmail|proton|gmx|mail)\./i;
+const BUSINESS = /\b(ltd|limited|plc|llp|motors?|motor services|garage|autos?|automotive|tyres?|services|centre|center|engineering|repairs?|mot testing|vat\s*(no|reg|\d{3})|registered\s*(no|office)|company\s*(no|reg))\b|www\.|https?:/i;
 
 function findPersonalData(data, page) {
   // Tesseract joins words across columns (a receipt lying on an invoice, a
@@ -852,7 +885,7 @@ function findPersonalData(data, page) {
       let text = "", spans = [];
       for (const w of seg) { text += (text ? " " : "") + w.text; spans.push({ w, start: text.length - w.text.length, end: text.length }); }
       const ws = seg.map(w => w.bbox);
-      lines.push({ text, spans, bbox: { x0: Math.min(...ws.map(r => r.x0)), y0: Math.min(...ws.map(r => r.y0)), x1: Math.max(...ws.map(r => r.x1)), y1: Math.max(...ws.map(r => r.y1)) } });
+      lines.push({ text, spans, src: l.text, bbox: { x0: Math.min(...ws.map(r => r.x0)), y0: Math.min(...ws.map(r => r.y0)), x1: Math.max(...ws.map(r => r.x1)), y1: Math.max(...ws.map(r => r.y1)) } });
       seg = [];
     };
     for (const w of l.words) { if (seg.length && w.bbox.x0 - seg[seg.length - 1].bbox.x1 > gap) flush(); seg.push(w); }
@@ -866,22 +899,37 @@ function findPersonalData(data, page) {
   const below = l => lines.filter(o => o !== l && o.bbox.y0 >= l.bbox.y1 - 0.3 * lh(l) && o.bbox.y0 - l.bbox.y1 < 1.5 * lh(l)
     && o.bbox.x0 < l.bbox.x1 && o.bbox.x1 > l.bbox.x0).sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
   // Does this line, or the one just above or below it, read like a business?
-  const businessy = l => [l, above(l), below(l)].some(o => o && BUSINESS.test(o.text));
+  // (judged on the whole printed line too, before it was split at gaps; a
+  // company email or website on the line marks it as the garage's header)
+  const companyEmail = t => /[\w.+-]+@[\w-]+\s?\./.test(t) && !PERSONAL_EMAIL.test(t.replace(/\s/g, ""));
+  const bizText = t => BUSINESS.test(t) || companyEmail(t);
+  // Only close context counts: the same printed line, or the line directly
+  // above (allowing for spaced-out headers) or below in the same column. A
+  // customer label nearby always means personal: on invoices the owner's
+  // address often sits right under the garage's header.
+  const directlyAbove = l => lines.filter(o => o !== l && o.bbox.y1 <= l.bbox.y0 + 0.3 * lh(l) && l.bbox.y0 - o.bbox.y1 < 2.5 * lh(l)
+    && Math.abs(o.bbox.x0 - l.bbox.x0) < 2 * lh(l)).sort((a, b) => b.bbox.y1 - a.bbox.y1)[0];
+  const CUSTOMER_LABEL = /\b(customer|invoice\s*to|bill(ed)?\s*to|deliver(y)?\s*to|owner|keeper|client|account\s*name)\b/i;
+  const businessy = l => {
+    const ctx = [l, directlyAbove(l), below(l)].filter(Boolean);
+    if (ctx.some(o => CUSTOMER_LABEL.test(o.text) || PERSONAL_EMAIL.test((o.src || o.text).replace(/\s/g, "")))) return false;
+    return ctx.some(o => bizText(o.text) || bizText(o.src || ""));
+  };
   const boxes = [];
-  const add = (bbox, category, text, business = false) => boxes.push({ page, category, text, x0: bbox.x0, y0: bbox.y0, x1: bbox.x1, y1: bbox.y1, source: "device", on: !business, business });
+  const add = (bbox, category, text, business = false) => { if (!business) boxes.push({ page, category, text, x0: bbox.x0, y0: bbox.y0, x1: bbox.x1, y1: bbox.y1, source: "device", on: true }); };
   const union = ws => ({ x0: Math.min(...ws.map(w => w.bbox.x0)), y0: Math.min(...ws.map(w => w.bbox.y0)), x1: Math.max(...ws.map(w => w.bbox.x1)), y1: Math.max(...ws.map(w => w.bbox.y1)) });
   const boxMatch = (line, re, category, ok = () => true, business = false) => {
     for (const m of line.text.matchAll(re)) {
       if (!ok(m[0], line)) continue;
       const ws = line.spans.filter(s => s.end > m.index && s.start < m.index + m[0].length).map(s => s.w);
-      if (ws.length) add(union(ws), category, m[0], business);
+      if (ws.length) add(union(ws), category, m[0], typeof business === "function" ? business(m[0]) : business);
     }
   };
   const digitsOf = t => t.replace(/\D/g, "");
   for (const line of lines) {
     const t = line.text;
     const biz = businessy(line);
-    boxMatch(line, /[\w.+-]+@[\w-]+(?:\s?\.\s?[\w-]+)+/g, "email", undefined, biz || /@[^@\s]*(motor|garage|auto|tyre|service)/i.test(t));   // OCR often adds a space after a dot
+    boxMatch(line, /[\w.+-]+@[\w-]+(?:\s?\.\s?[\w-]+)+/g, "email", undefined, m => !PERSONAL_EMAIL.test(m.replace(/\s/g, "")));   // OCR often adds a space after a dot
     boxMatch(line, /(?<![\d+])(?:\+44\s?\(?0?\)?\s?|\(?0)\d[\d\s()-]{8,13}\d(?!\d)/g, "phone", m => { const n = digitsOf(m).length; return n >= 10 && n <= 13; }, biz);
     boxMatch(line, /\b(?:\d[ -]?){13,19}\b/g, "account_or_card_number", m => luhn(digitsOf(m)));
     boxMatch(line, /(?:\*{2,}|[xX]{3,})[\s-]?\d{4}\b/g, "account_or_card_number");
@@ -899,7 +947,9 @@ function findPersonalData(data, page) {
     if (/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i.test(t)) {
       const block = [line];
       for (let up = above(line), n = 0; up && n < 3 && !NOT_ADDRESS.test(up.text); up = above(up), n++) block.push(up);
-      const business = block.some(businessy);   // the garage's address, not the owner's
+      const top = block[block.length - 1], over = directlyAbove(top);
+      const labelled = [...block, over].some(o => o && CUSTOMER_LABEL.test(o.text));
+      const business = !labelled && block.some(businessy);   // the garage's address, not the owner's
       for (const l of block) add(l.bbox, "address", l.text, business);
     }
     // "Customer: Jane Smith": box what follows the label, or the line below if nothing does.
@@ -1110,14 +1160,25 @@ function setDrawing(on) {
   $("checkCanvases").classList.toggle("drawing", on);
 }
 $("drawBtn").onclick = () => setDrawing(!drawing);
-$("saveAnyway").onclick = () => { saveVisit(result); $("saveAsk").hidden = true; $("resultTitle").textContent = "Saved to your history"; };
+$("saveAnyway").onclick = () => { saveVisit(result); $("saveAsk").hidden = true; $("resultTitle").textContent = "Saved to your history"; showJustAdded(false); };
 $("dontSave").onclick = () => { $("saveAsk").hidden = true; $("resultTitle").textContent = "Not saved"; };
 $("backBtn").onclick = () => { $("deviceCheck").hidden = true; $("addCard").hidden = false; setDrawing(false); scrollTo({ top: 0 }); };
 $("cancelBtn").onclick = () => {
   if (!confirm(`Cancel and remove ${pages.length > 1 ? `these ${pages.length} pages` : "this page"}? Nothing will be saved.`)) return;
   resetPages(); setStatus("Cancelled. Nothing was saved."); scrollTo({ top: 0 });
 };
-$("doneBtn").onclick = () => { resetPages(); scrollTo({ top: 0 }); };
+$("doneBtn").onclick = () => { resetPages(); $("justAdded").hidden = true; scrollTo({ top: 0 }); };
+// After a scan is saved, History is where you land: the new visit opens at
+// the top, under a short note of what happened and what to do next.
+function showJustAdded(warn) {
+  $("justAddedText").textContent = $("resultStatus").textContent;
+  $("justAddedText").className = "small" + (warn ? " status error" : "");
+  $("justAdded").hidden = false;
+  showTab("history");
+  scrollTo({ top: 0 });
+}
+$("seeRedaction").onclick = () => { showTab("scan"); $("redactionBox").open = true; $("redactionBox").scrollIntoView({ block: "start" }); };
+$("scanAnother").onclick = () => { resetPages(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 }); };
 
 function paintCheck(c, p, draft) {
   const ctx = c.getContext("2d");
@@ -1140,11 +1201,10 @@ function checkSummary() {
   $("checkLead").textContent = found
     ? "Your phone found these personal details and will black them out before the pages leave it."
     : "Your phone didn't find any personal details on " + (pages.length > 1 ? "these pages." : "this page.");
-  const leftOpen = bizOff ? ` ${bizOff} dashed box${bizOff === 1 ? " looks" : "es look"} like the garage's own details, so ${bizOff === 1 ? "it's" : "they're"} left uncovered for AI to read; tap to cover.` : "";
+  const leftOpen = "";
   const youOff = all.length - on - bizOff;
   $("checkSummary").textContent = on
     ? `${on} area${on === 1 ? "" : "s"} will be blacked out${youOff > 0 ? `, ${youOff} uncovered by you` : ""}. Faint boxes turn solid black when sent.${leftOpen}`
-    : found && youOff <= 0 ? `No personal details found, only the garage's own.${leftOpen} If you can see anything personal, tap Draw a box and cover it.`
     : found ? "Nothing will be blacked out: you've uncovered everything your phone found."
     : "No personal details found, so nothing needs blacking out. If you can see any, tap Draw a box and cover them.";
   $("sendBtn").textContent = on ? "Send blacked-out pages" : "Send pages";
@@ -1296,7 +1356,8 @@ $("sendBtn").onclick = async () => {
       : `Your phone blacked out everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. Cost about $${usd.toFixed(2)}.`,
       aiFound ? "error" : "", $("resultStatus"));
     $("redactionBox").open = aiFound > 0;
-    scrollTo({ top: 0 });
+    if (askFirst) scrollTo({ top: 0 });
+    else showJustAdded(aiFound > 0);
   } catch (err) {
     setStatus("Failed: " + err.message + failHint(err), "error", status);
   } finally {
@@ -1489,23 +1550,123 @@ const visitLabel = v => [v.date || "undated", visitTitle(v)].join(" · ");
 const workSummary = v => (v.work_items.length ? v.work_items : v.line_items.filter(l => l.category !== "labour").map(l => l.description)).join(", ")
   || v.doc_type.replaceAll("_", " ");
 
-function renderHistory() {
-  const visits = [...saved.visits].sort(byDateDesc);
-  $("historyRows").replaceChildren(...visits.map(v => {
-    const del = el("button", { className: "linkbtn", type: "button", ariaLabel: "Delete visit" }, "✕");
+// History, styled like the Phase 1 app: each visit opens to icon tiles by
+// group (tap a tile for its items), labour, advisories and what was paid.
+const GROUPS = [
+  { id: "filters", label: "Filters & plugs", icon: "🌀", categories: ["oil_filter", "air_filter", "pollen_filter", "fuel_filter", "spark_plugs"] },
+  { id: "fluids", label: "Oil & fluids", icon: "🛢️", categories: ["engine_oil", "coolant", "screenwash"] },
+  { id: "brakes", label: "Brakes", icon: "🛑", categories: ["brake_pads_front", "brake_pads_rear", "brake_discs_front", "brake_discs_rear", "brake_fluid"] },
+  { id: "tyres", label: "Tyres", icon: "🛞", categories: ["tyre"] },
+  { id: "major", label: "Major works", icon: "⚙️", categories: ["timing_belt", "aux_belt", "clutch", "exhaust", "suspension"] },
+  { id: "electrical", label: "Electrical", icon: "⚡", categories: ["battery", "bulb", "wipers"] },
+  { id: "checks", label: "MOT & checks", icon: "📋", categories: ["mot_test", "diagnostics"] },
+  { id: "other", label: "Other", icon: "📦", categories: ["other"] },
+];
+const groupOf = c => GROUPS.find(g => g.categories.includes(c))?.id || "other";
+const sumOf = items => items.some(i => i.line_total != null) ? items.reduce((t, i) => t + (i.line_total || 0), 0) : null;
+function groupItems(items) {
+  const labour = items.filter(i => i.category === "labour");
+  const groups = GROUPS.map(g => ({ ...g, items: items.filter(i => i.category !== "labour" && groupOf(i.category) === g.id) }))
+    .filter(g => g.items.length).map(g => ({ ...g, subtotal: sumOf(g.items) }));
+  return { groups, labour };
+}
+// A short derived name for a visit, e.g. "Full service + MOT".
+function visitSummaryTitle(v) {
+  if (v.source === "dvsa") return v.work_items[0] || "MOT test";
+  const items = v.line_items, cats = new Set(items.map(i => i.category)), parts = [];
+  if (cats.has("engine_oil") && cats.has("oil_filter")) parts.push(["air_filter", "pollen_filter", "fuel_filter"].some(c => cats.has(c)) ? "Full service" : "Oil service");
+  if (cats.has("mot_test")) parts.push("MOT");
+  const gs = new Set(items.map(i => groupOf(i.category)));
+  for (const id of ["brakes", "tyres", "major"]) if (gs.has(id)) parts.push(GROUPS.find(g => g.id === id).label);
+  if (parts.length) return parts.join(" + ");
+  if (v.work_items.length) return v.work_items.slice(0, 2).join(", ");
+  if (items.length === 1) return items[0].description;
+  return groupItems(items).groups.slice(0, 3).map(g => g.label).join(", ") || v.doc_type.replaceAll("_", " ");
+}
+const niceDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Undated";
+const chevron = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("width", "1em"); s.setAttribute("height", "1em");
+  s.innerHTML = '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
+const openVisits = new Set();
+
+function visitEntry(v) {
+  const isNew = v.id === lastVisitId;
+  const spend = v.total_cost ?? sumOf(v.line_items);
+  const head = el("button", { type: "button", className: "visit-head", ariaExpanded: String(openVisits.has(v.id)) },
+    el("span", {},
+      el("strong", {}, niceDate(v.date)),
+      ...(v.mileage != null ? [el("span", { className: "muted" }, ` · ${v.mileage.toLocaleString()} miles`)] : []),
+      ...(isNew ? [el("span", { className: "badge-new" }, "New")] : []),
+      el("span", { className: "visit-title" }, [visitSummaryTitle(v), v.line_items.length ? `${v.line_items.length} item${v.line_items.length === 1 ? "" : "s"}` : "", spend != null ? money(spend) : ""].filter(Boolean).join(" · "))),
+    el("span", { className: "toggle", ariaHidden: "true" }, chevron()));
+  const body = el("div");
+  const draw = () => {
+    body.replaceChildren();
+    if (!openVisits.has(v.id)) return;
+    body.append(el("div", { className: "muted small" }, [v.source === "dvsa" ? "DVSA MOT record" : v.service_mode === "mobile" ? "Mobile service" : v.garage_name || "Unknown garage", v.doc_type.replaceAll("_", " ")].join(" · ")));
+    const { groups, labour } = groupItems(v.line_items);
+    if (groups.length) {
+      const tiles = el("div", { className: "tiles" });
+      for (const g of groups) {
+        const panel = el("table", { className: "items tile-panel small" }, el("tbody", {}, ...g.items.map(it => el("tr", {}, el("td", {}, it.description), el("td", { className: "num" }, money(it.line_total) || "")))));
+        panel.hidden = true;
+        const tile = el("button", { type: "button", className: "tile", ariaExpanded: "false" },
+          el("span", { className: "tile-icon", ariaHidden: "true" }, g.icon),
+          el("span", {}, el("span", { className: "tile-label" }, g.label),
+            el("span", { className: "muted small" }, `${g.items.length}${g.subtotal != null ? " · " + money(g.subtotal) : ""}`, el("span", { className: "tile-chev", ariaHidden: "true" }, chevron()))));
+        tile.onclick = () => { panel.hidden = !panel.hidden; tile.ariaExpanded = String(!panel.hidden); };
+        tiles.append(tile, panel);
+      }
+      body.append(tiles);
+    } else if (v.work_items.length) body.append(el("p", { className: "small" }, v.work_items.join(", ")));
+    if (labour.length) body.append(el("table", { className: "items small" }, el("tbody", {}, ...labour.map(it => el("tr", {}, el("td", {}, "🔧 " + it.description), el("td", { className: "num" }, money(it.line_total) || ""))))));
+    for (const a of v.advisories) body.append(el("p", { className: "small note" }, "Advisory: " + a));
+    if (spend != null) body.append(el("div", { className: "small" }, "Paid ", el("strong", {}, money(spend))));
+    const notes = saved.notes.filter(n => n.visitId === v.id);
+    if (notes.length) body.append(el("p", { className: "small" }, `🗣️ ${notes.length} mechanic's note${notes.length === 1 ? "" : "s"}: ` + notes.map(n => n.parsed.summary).join("; ")));
+    const actions = el("div", { className: "row", style: "margin-top:8px" });
+    if (v.keptPages) {
+      const view = el("button", { type: "button", className: "linkbtn small" }, `📄 View ${v.keptPages} blacked-out page${v.keptPages === 1 ? "" : "s"}`);
+      view.onclick = () => openKeptPages(v);
+      actions.append(view);
+    }
+    const del = el("button", { type: "button", className: "linkbtn small" }, "Delete this visit");
     del.onclick = () => {
+      if (!confirm(`Delete the ${niceDate(v.date)} visit from your history?`)) return;
       saved.visits = saved.visits.filter(x => x.id !== v.id);
       if (lastVisitId === v.id) lastVisitId = "";
-      pageStore.del(v.id);
-      saveHistory(); renderHistory();
+      pageStore.del(v.id); saveHistory(); renderHistory();
     };
-    return el("tr", {},
-      el("td", {}, el("div", { style: "font-weight:600" }, visitLabel(v)), el("div", { className: "muted small" },
-        workSummary(v) + (v.keptPages ? ` · 📎 ${v.keptPages} redacted page${v.keptPages === 1 ? "" : "s"} kept` : ""))),
-      el("td", { className: "num" }, v.mileage != null ? v.mileage.toLocaleString() + " mi" : ""),
-      el("td", { className: "num" }, del));
-  }));
-  $("historyEmpty").hidden = visits.length > 0;
+    actions.append(del);
+    body.append(actions);
+  };
+  head.onclick = () => { openVisits.has(v.id) ? openVisits.delete(v.id) : openVisits.add(v.id); head.ariaExpanded = String(openVisits.has(v.id)); draw(); };
+  draw();
+  return el("div", { className: "visit" + (isNew ? " new" : "") }, head, body);
+}
+
+async function openKeptPages(v) {
+  const kept = await pageStore.get(v.id);
+  if (!kept?.length) return;
+  closeViewer();
+  const urls = kept.map(p => URL.createObjectURL(p.blob));
+  const close = el("button", { type: "button" }, "Close");
+  const viewer = el("div", { id: "viewer", role: "dialog", ariaLabel: "Blacked-out pages" },
+    el("div", { className: "bar" }, el("span", {}, `${niceDate(v.date)} · ${urls.length} page${urls.length === 1 ? "" : "s"}`), close),
+    el("div", { className: "scroll" }, ...urls.map(u => el("img", { src: u, alt: "" }))));
+  close.onclick = () => { closeViewer(); urls.forEach(URL.revokeObjectURL); };
+  document.body.append(viewer);
+}
+
+function renderHistory() {
+  const visits = [...saved.visits].sort(byDateDesc);
+  if (lastVisitId) openVisits.add(lastVisitId);
+  // the newest addition first, then by date
+  const ordered = [...visits.filter(v => v.id === lastVisitId), ...visits.filter(v => v.id !== lastVisitId)];
+  $("historyList").replaceChildren(...ordered.map(visitEntry));
+  const total = visits.reduce((t, v) => t + (v.total_cost ?? 0), 0);
+  const miles = Math.max(0, ...visits.map(v => v.mileage || 0));
+  $("historyStats").textContent = visits.length ? [`🧾 ${visits.length} visit${visits.length === 1 ? "" : "s"}`, total ? `💷 ${money(total)} recorded` : "", miles ? `🛣️ ${miles.toLocaleString()} miles latest` : ""].filter(Boolean).join(" · ") : "";
+$("historyEmpty").hidden = visits.length > 0;
   const keep = $("adviceVisit").value || lastVisitId;
   $("adviceVisit").replaceChildren(el("option", { value: "" }, visits.length ? "Another visit (enter the date)" : "No saved visits yet"),
     ...visits.map(v => el("option", { value: v.id }, visitLabel(v))));
