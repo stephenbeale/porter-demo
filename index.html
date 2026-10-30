@@ -50,6 +50,11 @@ input[type=file] { display: none; }
 #viewer .scroll { flex: 1; overflow: auto; touch-action: pan-x pan-y pinch-zoom; }
 #viewer img { width: 100%; display: block; }
 .thumb { position: relative; flex: none; }
+.thumb .state { position: absolute; inset: 0; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; color: #fff; text-align: center; padding: 6px; pointer-events: none; }
+.thumb .state.waiting { background: rgba(0,0,0,.45); }
+.thumb .state.busy { background: rgba(31,111,235,.55); }
+.thumb .state.done { background: transparent; align-items: flex-start; justify-content: flex-end; padding: 38px 8px; font-size: 18px; color: var(--good); text-shadow: 0 0 3px #000; }
 .thumb .num { position: absolute; left: 4px; bottom: 4px; min-width: 24px; padding: 1px 6px; border-radius: 10px; background: rgba(0,0,0,.65); color: #fff; font-size: 13px; font-weight: 700; text-align: center; }
 #thumbNav { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 #thumbNav input { flex: 1; accent-color: var(--accent); }
@@ -545,13 +550,28 @@ function renderPages() {
     x.onclick = () => removePage(i);
     const img = el("img", { src: p.small.toDataURL("image/jpeg", 0.6), alt: `Page ${i + 1}` });
     img.onclick = () => openViewer(i);
-    return el("div", { className: "thumb" }, img, x, el("span", { className: "num" }, String(i + 1)));
+    const state = el("div", { className: "state" + (p.badge ? " " + p.badge.state : ""), ariaHidden: "true" }, p.badge?.text || "");
+    state.hidden = !p.badge;
+    return el("div", { className: "thumb" }, img, state, x, el("span", { className: "num" }, String(i + 1)));
   }));
   $("thumbHint").hidden = !pages.length;
   requestAnimationFrame(updateThumbNav);
   $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
   $("clearBtn").textContent = pages.length > 1 ? "Remove all" : "Remove";
 }
+// Progress shown on the pages themselves while they're checked: waiting
+// (dimmed), busy ("Reading 45%"), done (a tick). Kept on the page object so
+// a re-render (after a page is turned upright) keeps it.
+function markThumb(i, state, text = "") {
+  const p = pages[i];
+  if (!p) return;
+  p.badge = state ? { state, text } : null;
+  const t = $("thumbs").children[i], o = t?.querySelector(".state");
+  if (!o) return;
+  o.className = "state" + (state ? " " + state : ""); o.textContent = text; o.hidden = !state;
+  if (state === "busy") t.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+}
+
 // With more pages than fit, a slider shows where you are in the strip and
 // scrolls it ("Pages 4-6 of 13").
 function updateThumbNav() {
@@ -706,16 +726,36 @@ function rotated(src, rot) {
   ctx.drawImage(src, -src.width / 2, -src.height / 2);
   return c;
 }
-async function recognizeUpright(worker, src) {
-  let best = { data: (await worker.recognize(src, {}, { blocks: true })).data, rot: 0 };
-  best.score = goodWords(best.data);
-  if (best.score >= 12) return best;
-  for (const rot of [90, 270, 180]) {
-    const data = (await worker.recognize(rotated(src, rot), {}, { blocks: true })).data;
-    const score = goodWords(data);
-    if (score > best.score * 1.5 + 3) best = { data, rot, score };
+// The orientation trials run on a small copy (several times quicker), and
+// only the winning way up gets a full read. say() reports each step.
+const OCR_PAGE_TIMEOUT_MS = 60000;
+function scaledCopy(src, maxEdge) {
+  const k = Math.min(1, maxEdge / Math.max(src.width, src.height));
+  const c = el("canvas", { width: Math.round(src.width * k), height: Math.round(src.height * k) });
+  c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+async function recognizeUpright(worker, src, say = () => {}) {
+  const read = async c => (await worker.recognize(c, {}, { blocks: true })).data;
+  const first = await read(src);
+  if (goodWords(first) >= 12) return { data: first, rot: 0 };
+  const small = scaledCopy(src, 1000);
+  say("hard to read, checking if it's sideways (1 of 4)");
+  let best = { rot: 0, score: goodWords(await read(small)) };
+  for (const [n, rot] of [90, 270, 180].entries()) {
+    say(`hard to read, checking if it's sideways (${n + 2} of 4)`);
+    const score = goodWords(await read(rotated(small, rot)));
+    if (score > best.score * 1.5 + 3) best = { rot, score };
   }
-  return best;
+  if (!best.rot) return { data: first, rot: 0 };
+  say("turned it upright, reading it again");
+  return { data: await read(rotated(src, best.rot)), rot: best.rot };
+}
+// A page that takes too long is skipped (the owner covers it by hand) and the
+// worker is restarted, since a stuck job can't be cancelled any other way.
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([promise, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("timeout")), ms); })]).finally(() => clearTimeout(timer));
 }
 const LABEL_NAME = /\b(customer|name|owner|keeper|client|bill(?:ed)? to|invoice to|deliver to|account name|driver|contact|operator|tester|inspector|technician)\b\s*:?/i;
 const NOT_ADDRESS = /invoice|date|reg|vin|mileage|odometer|total|vat|£|\$|€/i;
@@ -849,16 +889,35 @@ $("scanBtn").onclick = async () => {
   $("results").hidden = true;
   let ocrFailed = null, peopleFailed = null, turned = false;
   setStatus("Loading the on-phone checks (about 14 MB, first time only)…", "busy");
+  pages.forEach((p, i) => markThumb(i, "waiting", "Waiting"));
   const detector = getPeopleDetector().catch(err => { peopleFailed = err; return null; });
+  const skipped = [];
   try {
-    const worker = await getOcr();
     for (const [i, p] of pages.entries()) {
-      ocrProgress = m => { if (m.status === "recognizing text") setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy"); };
-      const { data, rot } = await recognizeUpright(worker, p.small);
-      if (rot) { p.small = p.full = rotated(p.small, rot); turned = true; }
-      p.local = findPersonalData(data, i + 1);
-      p.ocrText = data.text || "";
-      p.textPx = smallPrintPx(data);
+      const worker = await getOcr();
+      let step = "Reading";
+      markThumb(i, "busy", "Reading…");
+      const say = what => { step = what; markThumb(i, "busy", "Turning…"); setStatus(`Page ${i + 1} of ${pages.length}: ${what}…`, "busy"); };
+      ocrProgress = m => {
+        if (m.status !== "recognizing text" || step !== "Reading") return;
+        markThumb(i, "busy", `Reading ${Math.round(m.progress * 100)}%`);
+        setStatus(`Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
+      };
+      try {
+        const { data, rot } = await withTimeout(recognizeUpright(worker, p.small, say), OCR_PAGE_TIMEOUT_MS);
+        if (rot) { p.small = p.full = rotated(p.small, rot); turned = true; }
+        p.local = findPersonalData(data, i + 1);
+        p.ocrText = data.text || "";
+        p.textPx = smallPrintPx(data);
+        p.unchecked = false;
+        markThumb(i, "waiting", "Read");
+      } catch (err) {
+        if (err.message !== "timeout") throw err;
+        ocrWorker?.terminate?.(); ocrWorker = null;   // a fresh one for the next page
+        p.local = p.local || []; p.unchecked = true; p.ocrText = ""; p.textPx = null;
+        skipped.push(i + 1);
+        markThumb(i, "busy", "Not checked");
+      }
     }
   } catch (err) {
     ocrFailed = err;
@@ -871,18 +930,22 @@ $("scanBtn").onclick = async () => {
   if (h) {
     for (const [i, p] of pages.entries()) {
       setStatus(`Checking for photos of people… page ${i + 1} of ${pages.length}`, "busy");
+      markThumb(i, "busy", "Checking…");
       try { p.person = personIn(await h.detect(p.small)); } catch (err) { peopleFailed = err; }
+      markThumb(i, "done", "✓");
     }
   }
   $("scanBtn").disabled = pages.length === 0;
+  pages.forEach((p, i) => markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓"));
   setStatus("");
   ocrFailedLast = !!ocrFailed;
   afterChecks();
   const problems = [
     ocrFailed && `Your phone couldn't look for personal details (${ocrFailed.message}). Cover them yourself: drag across each one before sending.`,
+    skipped.length && `Page${skipped.length > 1 ? "s" : ""} ${skipped.join(", ")} took too long to read, so your phone couldn't check ${skipped.length > 1 ? "them" : "it"}. Cover any personal details yourself (Draw a box), or remove ${skipped.length > 1 ? "those pages" : "that page"}.`,
     peopleFailed && "Your phone couldn't check for photos of people, so please make sure none of these pages shows anyone.",
   ].filter(Boolean);
-  if (ocrFailed) setDrawing(true);
+  if (ocrFailed || skipped.length) setDrawing(true);
   if (problems.length) setStatus(problems.join(" "), "error", $("checkStatus"));
   $("deviceCheck").scrollIntoView({ behavior: "smooth", block: "start" });
 };
@@ -899,7 +962,7 @@ function afterChecks() {
       (blocked.length === 1 ? "it" : "they") + " won't be sent.";
     $("removeBlocked").textContent = pages.length === blocked.length ? "Remove and start again" : `Remove ${blocked.length === 1 ? "that page" : "those pages"}`;
   }
-  const doubtful = blocked.length ? -1 : pages.findIndex(p => !p.keep && notCarKind(p.ocrText || ""));
+  const doubtful = blocked.length ? -1 : pages.findIndex(p => !p.keep && !p.unchecked && notCarKind(p.ocrText || ""));
   confirmedForCar = pages.some(p => p.keep);
   $("notCarAsk").hidden = doubtful < 0;
   if (doubtful >= 0) {
