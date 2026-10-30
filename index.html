@@ -3086,7 +3086,7 @@ $("addCar").onclick = e => {
   if (!/^[A-Z0-9]{2,8}$/.test(r)) { setStatus("That doesn't look like a registration.", "error", $("historyStatus")); return; }
   addCar(r); saveHistory(); shutYears.clear(); lastVisitId = "";
   renderHistory(); renderDueDates(); scrollTo({ top: 0 });
-  setStatus(`Now showing ${plateText(r)}. Add its paperwork, or switch back with "Switch vehicle".`, "", $("historyStatus"));
+  setStatus(`Now showing ${plateText(r)}. Add its paperwork, or tap the number plate to switch back.`, "", $("historyStatus"));
 };
 // One tap folds the whole timeline down to its years, or opens every level.
 $("foldAll").onclick = () => {
