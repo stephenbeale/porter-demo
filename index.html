@@ -59,6 +59,7 @@ input[type=file] { display: none; }
 #thumbNav { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 #thumbNav input { flex: 1; accent-color: var(--accent); }
 #thumbNav span { white-space: nowrap; }
+#thumbs.busy .thumb button { display: none; }
 .thumb button { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
   background: rgba(0,0,0,.65); color: #fff; font-size: 14px; line-height: 28px; padding: 0; cursor: pointer; }
 .status { margin-top: 12px; min-height: 1.4em; }
@@ -613,7 +614,7 @@ addEventListener("keydown", e => { if (e.key === "Escape") closeViewer(); });
 function removePage(i) {
   pages.splice(i, 1);
   pages.forEach((p, n) => (p.local || []).forEach(b => { b.page = n + 1; }));
-  if (!pages.length) { $("clearBtn").click(); return; }
+  if (!pages.length) { resetPages(); return; }
   renderPages();
   if (!$("deviceCheck").hidden) afterChecks();
   else setStatus(`${pages.length} page${pages.length > 1 ? "s" : ""} ready. Add more pages of the same document, or tap Process.`);
@@ -679,11 +680,32 @@ $("cameraBtn").onclick = () => touch || !webcamOk ? $("camera").click() : openWe
 $("filesBtn").onclick = () => $("files").click();
 $("camera").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
 $("files").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
-$("clearBtn").onclick = () => {
+// Processing runs are numbered; removing the pages ends the current run (its
+// on-phone reader is stopped and any later step checks the number and quits),
+// and a send that's already out is ignored when it comes back.
+let runId = 0, processing = false, cancelRun = () => {};
+function stopRun() {
+  runId++;
+  if (processing) {
+    cancelRun();
+    ocrWorker?.terminate?.(); ocrWorker = null;
+    ocrProgress = () => {};
+    processing = false; $("thumbs").classList.remove("busy");
+  }
+  stayAwake(false);
+}
+function resetPages() {
+  stopRun();
   closeWebcam();
   pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true;
   lastVisitId = "";
+  $("scanBtn").disabled = false;
   renderPages(); setStatus("");
+}
+$("clearBtn").onclick = () => {
+  const n = pages.length;
+  if ((n > 1 || processing) && !confirm(`${processing ? "Stop processing and remove" : "Remove"} ${n > 1 ? `all ${n} pages` : "this page"}? Nothing has been sent.`)) return;
+  resetPages();
 };
 
 // Step 1, on the phone: read the text with Tesseract (OCR in the browser; the
@@ -914,6 +936,11 @@ $("scanBtn").onclick = async () => {
   $("scanBtn").disabled = true;
   $("results").hidden = true;
   let ocrFailed = null, peopleFailed = null, turned = false;
+  const id = ++runId, live = () => id === runId;
+  const stopped = new Promise((_, rej) => { cancelRun = () => rej(new Error("cancelled")); });
+  stopped.catch(() => {});
+  const orStop = promise => Promise.race([promise, stopped]);
+  processing = true; $("thumbs").classList.add("busy");
   setStatus("Loading the on-phone checks (about 14 MB, first time only). Keep this screen open: phones pause web pages when locked.", "busy");
   pages.forEach((p, i) => markThumb(i, "waiting", "Waiting"));
   stayAwake(true); pausedNote = "";
@@ -921,7 +948,8 @@ $("scanBtn").onclick = async () => {
   const skipped = [];
   try {
     for (const [i, p] of pages.entries()) {
-      const worker = await getOcr();
+      const worker = await orStop(getOcr());
+      if (!live()) return;
       let step = "Reading";
       markThumb(i, "busy", "Reading…");
       const say = what => { step = what; markThumb(i, "busy", "Turning…"); setStatus(`Page ${i + 1} of ${pages.length}: ${what}…`, "busy"); };
@@ -931,7 +959,8 @@ $("scanBtn").onclick = async () => {
         setStatus(`${pausedNote}Finding personal details on this phone… page ${i + 1} of ${pages.length} (${Math.round(m.progress * 100)}%)`, "busy");
       };
       try {
-        const { data, rot } = await withTimeout(recognizeUpright(worker, p.small, say), OCR_PAGE_TIMEOUT_MS);
+        const { data, rot } = await orStop(withTimeout(recognizeUpright(worker, p.small, say), OCR_PAGE_TIMEOUT_MS));
+        if (!live()) return;
         if (rot) { p.small = p.full = rotated(p.small, rot); turned = true; }
         p.local = findPersonalData(data, i + 1);
         p.ocrText = data.text || "";
@@ -939,6 +968,7 @@ $("scanBtn").onclick = async () => {
         p.unchecked = false;
         markThumb(i, "waiting", "Read");
       } catch (err) {
+        if (!live()) return;
         if (err.message !== "timeout") throw err;
         ocrWorker?.terminate?.(); ocrWorker = null;   // a fresh one for the next page
         p.local = p.local || []; p.unchecked = true; p.ocrText = ""; p.textPx = null;
@@ -947,22 +977,26 @@ $("scanBtn").onclick = async () => {
       }
     }
   } catch (err) {
+    if (!live()) return;
     ocrFailed = err;
     pages.forEach(p => { p.local = p.local || []; });
   } finally {
-    ocrProgress = () => {};
+    if (live()) ocrProgress = () => {};
   }
   if (turned) renderPages();
-  const h = await detector;
+  const h = await orStop(detector).catch(() => null);
+  if (!live()) return;
   if (h) {
     for (const [i, p] of pages.entries()) {
       setStatus(`Checking for photos of people… page ${i + 1} of ${pages.length}`, "busy");
       markThumb(i, "busy", "Checking…");
-      try { p.person = personIn(await h.detect(p.small)); } catch (err) { peopleFailed = err; }
+      try { p.person = personIn(await orStop(h.detect(p.small))); } catch (err) { if (!live()) return; peopleFailed = err; }
+      if (!live()) return;
       markThumb(i, "done", "✓");
     }
   }
   $("scanBtn").disabled = pages.length === 0;
+  processing = false; $("thumbs").classList.remove("busy");
   stayAwake(false);
   pages.forEach((p, i) => markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓"));
   setStatus("");
@@ -1003,7 +1037,7 @@ function afterChecks() {
 }
 function removePages(drop) {
   const keep = pages.filter((p, i) => !drop(p, i));
-  if (!keep.length) { $("clearBtn").click(); setStatus("Removed. Nothing was sent."); return; }
+  if (!keep.length) { resetPages(); setStatus("Removed. Nothing was sent."); return; }
   pages = keep;
   pages.forEach((p, i) => p.local.forEach(b => { b.page = i + 1; }));
   renderPages();
@@ -1172,6 +1206,7 @@ function blackedOut(p) {
 }
 
 $("sendBtn").onclick = async () => {
+  const sendRun = runId;
   const status = $("checkStatus");
   const cred = credentials(status);
   if (!cred) return;
@@ -1198,6 +1233,7 @@ $("sendBtn").onclick = async () => {
   setStatus("Reading the blacked-out pages… (10-60 seconds)", "busy", status);
   try {
     const msg = await callClaude(cred, body);
+    if (sendRun !== runId) return;   // the pages were removed while this was out
     const text = msg.content.find(b => b.type === "text")?.text;
     result = normalizeScan(JSON.parse(text));
     // Boxes come back in the sent image's pixels; put them back on the page.
@@ -1208,7 +1244,7 @@ $("sendBtn").onclick = async () => {
     if (result.content_flag && result.content_flag !== "none") {
       const reason = result.content_flag_reason || "it doesn't look like vehicle paperwork";
       result = null;
-      $("clearBtn").click();
+      resetPages();
       setStatus(`Porter can't accept this: ${reason} Nothing was saved, and the pages have been removed.`, "error");
       return;
     }
