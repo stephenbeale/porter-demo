@@ -44,7 +44,7 @@ input[type=file] { display: none; }
 .thumbs { display: flex; gap: 8px; overflow-x: auto; margin-top: 12px; }
 .thumbs img { height: 132px; border-radius: 8px; border: 1px solid var(--rule); display: block; cursor: zoom-in; }
 #viewer { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.92); display: flex; flex-direction: column; }
-#viewer .bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; color: #fff; }
+#viewer .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; color: #fff; }
 #viewer .bar span { flex: 1; font-weight: 600; }
 #viewer .bar button { min-height: 40px; padding: 6px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-size: 15px; }
 #viewer .scroll { flex: 1; overflow: auto; touch-action: pan-x pan-y pinch-zoom; }
@@ -70,6 +70,10 @@ input[type=file] { display: none; }
 .thumbnav span { white-space: nowrap; }
 .strip-label { margin: 12px 0 0; }
 .strip .thumbs { margin-top: 6px; }
+.box { border: 1px solid var(--rule); border-radius: 12px; padding: 0 10px 10px; margin-top: 10px; }
+.box.needs { border: 2px solid var(--warn); }
+.thumb-col { flex: none; display: flex; flex-direction: column; gap: 6px; width: min-content; }
+.thumb-col select { width: 100%; min-width: 120px; font-size: 13px; padding: 4px; }
 #thumbs.busy .thumb button { display: none; }
 .thumb button { position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
   background: rgba(0,0,0,.65); color: #fff; font-size: 14px; line-height: 28px; padding: 0; cursor: pointer; }
@@ -159,7 +163,7 @@ details > summary { font-weight: 600; }
     <span>Porter <span class="muted small">demo</span></span>
     <a href="#" id="settingsLink" class="small" style="font-weight:500" hidden>⚙ Key &amp; model</a>
   </h1>
-  <p class="muted small">Add a service invoice, MOT certificate or receipt. Your phone finds and blacks out your personal details first; AI only reads what's left.</p>
+  <p class="muted small">Add a service invoice, MOT certificate or receipt. Your phone finds and redacts your personal details first; AI only reads what's left.</p>
 
   <nav class="navtabs" id="mainTabs" aria-label="Sections">
     <button class="navtab" type="button" data-tab="scan" aria-current="page"><span class="ico" aria-hidden="true">➕</span>Add</button>
@@ -182,7 +186,7 @@ details > summary { font-weight: 600; }
       <label for="invite">Invite code</label>
       <input id="invite" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. alice-7f3k">
       <p class="small" id="inviteStatus"></p>
-      <p class="muted small">Pages are blacked out on this phone first, then they and your notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
+      <p class="muted small">Pages are redacted on this phone first, then they and your notes go through Porter's beta server to Anthropic to be read. The server doesn't keep them, and Anthropic doesn't train its models on them. <a href="#" id="useKey">Use my own API key instead</a></p>
     </div>
     <div id="keyBox">
       <div id="keyEntry">
@@ -190,7 +194,7 @@ details > summary { font-weight: 600; }
         <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
       </div>
       <p class="small" id="keySaved" hidden>✓ API key saved (<span id="keyHint"></span>) · <a href="#" id="changeKey">Change</a></p>
-      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are blacked out on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
+      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are redacted on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
     </div>
     <label for="model">Model</label>
     <select id="model">
@@ -221,11 +225,7 @@ details > summary { font-weight: 600; }
       </div>
     </div>
     <div id="thumbs">
-      <div class="strip" id="doneStrip" hidden>
-        <p class="strip-label small"><b>Processed</b> <span class="muted" id="doneCount"></span></p>
-        <div class="thumbs" id="doneRow"></div>
-        <div class="thumbnav" hidden><input type="range" min="0" max="1000" value="0" aria-label="Scroll through processed pages"><span class="small muted"></span></div>
-      </div>
+      <div id="docBoxes"></div>
       <div class="strip" id="nextStrip" hidden>
         <p class="strip-label small"><b>Next up</b> <span class="muted" id="nextCount"></span> <span class="muted" id="prepNote"></span></p>
         <div class="thumbs" id="nextRow"></div>
@@ -242,6 +242,7 @@ details > summary { font-weight: 600; }
 
   <section class="card" id="deviceCheck" data-tab="scan" hidden>
     <h2>Check before sending</h2>
+    <p class="small" id="docNote" hidden></p>
     <div class="ask" id="blockedAsk" hidden>
       <div class="ask-thumb"><div id="blockedThumb"></div><p style="margin:0 0 10px"><b id="blockedText"></b></p></div>
       <div class="row"><button class="btn secondary" id="removeBlocked" type="button">Remove that page</button></div>
@@ -263,7 +264,7 @@ details > summary { font-weight: 600; }
     <div id="checkCanvases"></div>
     <p class="muted small" id="checkSummary"></p>
     <div class="row">
-      <button class="btn" id="sendBtn" type="button">Send blacked-out pages</button>
+      <button class="btn" id="sendBtn" type="button">Send redacted pages</button>
       <button class="btn secondary" id="backBtn" type="button">Back to photos</button>
     </div>
     <div class="row" style="margin-top:8px"><button class="btn secondary" id="cancelBtn" type="button">Cancel</button></div>
@@ -281,7 +282,7 @@ details > summary { font-weight: 600; }
     <section class="card" id="resultCard">
       <h2 id="resultTitle">Saved to your history</h2>
       <div class="status" id="resultStatus" role="status" aria-live="polite"></div>
-      <div class="row" style="margin-top:12px"><button class="btn" id="doneBtn" type="button">Done: scan another document</button></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="doneBtn" type="button">Done: add another document</button></div>
     </section>
     <section class="card">
       <h2>Details</h2>
@@ -296,25 +297,25 @@ details > summary { font-weight: 600; }
       <div id="condition"></div>
     </section>
     <section class="card">
-      <details id="redactionBox"><summary>Blacked-out pages</summary>
+      <details id="redactionBox"><summary>Redacted pages</summary>
       <div class="tabs" role="tablist" style="margin-top:10px">
         <button class="tab" role="tab" aria-selected="true" data-view="review">Show the boxes</button>
         <button class="tab" role="tab" aria-selected="false" data-view="redacted">What a buyer would see</button>
       </div>
       <div id="canvases"></div>
       <details class="small"><summary>What do the box colours mean?</summary>
-        <p class="muted small"><b>Red:</b> blacked out on your phone before sending. <b>Purple:</b> personal details your phone missed, so they were sent, and AI found them; they're covered now. <b>Orange:</b> numbers matching your details from another scan, such as the end of a phone number showing under a receipt.</p>
+        <p class="muted small"><b>Red:</b> redacted on your phone before sending. <b>Purple:</b> personal details your phone missed, so they were sent, and AI found them; they're covered now. <b>Orange:</b> numbers matching your details from another scan, such as the end of a phone number showing under a receipt.</p>
       </details>
       <ul class="pii small" id="piiList" hidden></ul>
       <div class="row">
-        <button class="btn secondary" id="downloadBtn" type="button">⬇ Download blacked-out copy</button>
+        <button class="btn secondary" id="downloadBtn" type="button">⬇ Download redacted copy</button>
         <button class="btn secondary" id="keepBtn" type="button">📎 Keep a copy for selling</button>
       </div>
-      <p class="muted small" id="keepNote">"Keep a copy" stores the blacked-out pages in Porter, on this phone, so Sell can show them to a buyer later.</p>
+      <p class="muted small" id="keepNote">"Keep a copy" stores the redacted pages in Porter, on this phone, so Sell can show them to a buyer later.</p>
       </details>
       <div class="feedback" id="fbBox">
-        <p style="font-weight:600;margin:0 0 4px">Help improve Porter: did the black boxes cover all your personal details?</p>
-        <p class="muted small" style="margin:0 0 8px">Look through the blacked-out pages above. Only your answer is kept, never the pages; it shows how well the phone's check works.</p>
+        <p style="font-weight:600;margin:0 0 4px">Help improve Porter: did the redaction cover all your personal details?</p>
+        <p class="muted small" style="margin:0 0 8px">Look through the redacted pages above. Only your answer is kept, never the pages; it shows how well the phone's check works.</p>
         <div class="row">
           <button class="btn secondary" id="fbYes" type="button">👍 Yes, all covered</button>
           <button class="btn secondary" id="fbNo" type="button">Something was missed</button>
@@ -362,8 +363,8 @@ details > summary { font-weight: 600; }
       <p style="margin:0 0 6px"><b>Just added</b></p>
       <p class="small" id="justAddedText" style="margin:0 0 10px"></p>
       <div class="row">
-        <button class="btn secondary" id="seeRedaction" type="button">Check blacked-out pages</button>
-        <button class="btn secondary" id="scanAnother" type="button">Scan another</button>
+        <button class="btn secondary" id="seeRedaction" type="button">Check redacted pages</button>
+        <button class="btn secondary" id="scanAnother" type="button">Add another</button>
       </div>
     </div>
     <h2>Your car's history</h2>
@@ -376,7 +377,7 @@ details > summary { font-weight: 600; }
       <button class="btn secondary" id="restoreBtn" type="button">⬆ Restore</button>
     </div>
     <input id="restoreFile" type="file" accept="application/json,.json">
-    <p class="muted small">A backup is one file with your history and kept documents (personal details already blacked out). Use it to move to a new phone or into the Home Screen app.</p>
+    <p class="muted small">A backup is one file with your history and kept documents (personal details already redacted). Use it to move to a new phone or into the Home Screen app.</p>
     <p class="small" id="backupNudge"></p>
     <div class="status" id="historyStatus" role="status" aria-live="polite"></div>
   </section>
@@ -509,6 +510,7 @@ $("key").addEventListener("change", e => { const k = e.target.value.trim(); if (
 $("forget").addEventListener("click", e => { e.preventDefault(); store.del("porter.key"); store.del("porter.connected"); $("key").value = ""; $("keyCheck").textContent = ""; editingKey = false; showKey(); showConnect(); });
 
 let pages = [];   // { full: HTMLCanvasElement, small: HTMLCanvasElement }
+let laterDocs = [], docOf = { n: 1, total: 1 }, pageOrder = 0, newDocs = 0;   // documents waiting their turn after this one
 let result = null;
 
 function setStatus(msg, kind = "", el = $("status")) {
@@ -643,8 +645,76 @@ async function toCanvas(file, maxEdge) {
 // worked on is always first in Next up, so nothing needs to scroll on its own
 // and each row stays wherever the owner slid it. Process/Remove only show
 // once there's a page to act on.
+// Pages are sorted into documents as they're processed: pages sharing a
+// business name, website, VAT number or invoice number go together. With
+// more than one document, a page showing none of those goes in "Needs
+// checking" for the owner to place. Each document is checked and sent on its own.
+const BIZ_NAME = /^[^a-z\n]{0,6}([A-Z][A-Za-z'’&.\- ]{1,40}?\s(garage|motors?|autos?|tyres?|auto ?centre|services|engineering|motor company|car sales|mot centre))\b/im;
+const titleCase = t => t.toLowerCase().replace(/(^|[\s\-])([a-z])/g, (m, a, b) => a + b.toUpperCase()).replace(/[’']S\b/g, "'s");
+function anchorsOf(p) {
+  if (p.anchors && p.anchors.text === p.ocrText) return p.anchors;
+  const t = p.ocrText || "", keys = [];
+  let label = "";
+  const name = t.split("\n").slice(0, 12).join("\n").match(BIZ_NAME);
+  if (name) { keys.push("n:" + name[1].toLowerCase().replace(/[’']s\b/g, "s").replace(/\b(ltd|limited)\b/g, "").replace(/[^a-z]/g, "")); label = titleCase(name[1].trim()); }
+  for (const m of t.matchAll(/\b(?:www\.)?([a-z0-9-]{3,})\.(?:co\.uk|com|uk|net|org)\b/gi)) {
+    const d = m[1].toLowerCase();
+    if (PERSONAL_EMAIL.test(`@${d}.`) || d === "www") continue;
+    keys.push("d:" + d); label ||= m[0].replace(/^www\./i, "").toLowerCase();
+  }
+  const vat = t.match(/vat\s*(?:reg(?:istration)?\.?)?\s*(?:no\.?|number)?\s*:?\s*(?:GB)?\s*(\d{3}\s?\d{4}\s?\d{2})\b/i);
+  if (vat) keys.push("v:" + vat[1].replace(/\s/g, ""));
+  const inv = t.match(/invoice\s*(?:no\.?|number|#)?\s*:?\s*([A-Z]{0,3}\d{4,})\b/i);
+  if (inv) keys.push("i:" + inv[1].toUpperCase());
+  return (p.anchors = { text: p.ocrText, keys: [...new Set(keys)], label });
+}
+function sortIntoDocuments() {
+  const done = pages.filter(p => p.prepared);
+  const parent = new Map(), find = k => { while (parent.get(k) !== k) k = parent.get(k); return k; };
+  const keysOf = p => p.manualDoc ? [p.manualDoc] : anchorsOf(p).keys;
+  for (const p of done) {
+    const ks = keysOf(p);
+    ks.forEach(k => parent.has(k) || parent.set(k, k));
+    ks.slice(1).forEach(k => parent.set(find(k), find(ks[0])));
+  }
+  const byRoot = new Map(), loose = [];
+  for (const p of done) {
+    const ks = keysOf(p);
+    if (!ks.length) { loose.push(p); continue; }
+    const r = find(ks[0]);
+    if (!byRoot.has(r)) byRoot.set(r, { id: ks[0], pages: [], label: "" });
+    const d = byRoot.get(r);
+    d.pages.push(p);
+    d.label ||= p.manualDoc ? "" : anchorsOf(p).label;
+  }
+  const docs = [...byRoot.values()];
+  let needs = [];
+  if (!docs.length && loose.length) docs.push({ id: "all", pages: loose, label: "" });
+  else if (docs.length === 1) docs[0].pages.push(...loose);
+  else needs = loose;
+  docs.forEach(d => d.pages.sort((a, b) => a.order - b.order));
+  docs.sort((a, b) => a.pages[0].order - b.pages[0].order);
+  docs.forEach((d, n) => { d.label ||= docs.length > 1 ? `Document ${n + 1}` : ""; });
+  return { docs, needs };
+}
+function movePage(p, to) {
+  p.manualDoc = to === "new" ? `new:${++newDocs}` : to;
+  renderPages();
+}
+function docChoices(p, docs) {
+  const sel = el("select", { ariaLabel: `Which document upload ${pages.indexOf(p) + 1} belongs to` },
+    ...(p.manualDoc || anchorsOf(p).keys.length ? [] : [el("option", { value: "" }, "Choose…")]),
+    ...docs.map(d => el("option", { value: d.id }, d.label || "This document")),
+    el("option", { value: "new" }, "A separate document"));
+  const mine = docs.find(d => d.pages.includes(p));
+  sel.value = mine ? mine.id : "";
+  sel.onchange = () => sel.value && movePage(p, sel.value);
+  return sel;
+}
+
 const thumbUrls = new WeakMap();
 const thumbUrl = c => thumbUrls.get(c) || (thumbUrls.set(c, c.toDataURL("image/jpeg", 0.6)), thumbUrls.get(c));
+const stripScroll = {};
 const thumbAt = i => $("thumbs").querySelector(`.thumb[data-i="${i}"]`);
 function renderPages() {
   const tile = (p, i) => {
@@ -658,13 +728,30 @@ function renderPages() {
     t.dataset.i = i;
     return t;
   };
-  const done = pages.map((p, i) => [p, i]).filter(([p]) => p.prepared), next = pages.map((p, i) => [p, i]).filter(([p]) => !p.prepared);
-  $("doneRow").replaceChildren(...done.map(([p, i]) => tile(p, i)));
-  $("nextRow").replaceChildren(...next.map(([p, i]) => tile(p, i)));
-  $("doneStrip").hidden = !done.length; $("nextStrip").hidden = !next.length;
-  $("doneCount").textContent = done.length ? `(${done.length})` : "";
+  const { docs, needs } = sortIntoDocuments(), next = pages.filter(p => !p.prepared);
+  const box = (key, title, ps, extra, cls = "") => {
+    const row = el("div", { className: "thumbs" }, ...ps.map(p => {
+      const t = tile(p, pages.indexOf(p));
+      return extra ? el("div", { className: "thumb-col" }, t, extra(p)) : t;
+    }));
+    row.dataset.key = key;
+    row.addEventListener("scroll", () => { stripScroll[key] = row.scrollLeft; updateThumbNav(); }, { passive: true });
+    const range = el("input", { type: "range", min: 0, max: 1000, value: 0, ariaLabel: `Scroll through ${title}` });
+    range.oninput = () => { row.scrollLeft = range.value / 1000 * (row.scrollWidth - row.clientWidth); };
+    return el("div", { className: "strip box " + cls },
+      el("p", { className: "strip-label small" }, el("b", {}, title), ` (${ps.length})`),
+      ...(cls === "needs" ? [el("p", { className: "small muted", style: "margin:2px 0 0" }, "Which document is each of these part of?")] : []),
+      row, el("div", { className: "thumbnav", hidden: true }, range, el("span", { className: "small muted" })));
+  };
+  $("docBoxes").replaceChildren(
+    ...docs.map(d => box(d.id, d.label || "Processed", d.pages)),
+    ...(needs.length ? [box("needs", "Needs checking", needs, p => docChoices(p, docs), "needs")] : []));
+  $("docBoxes").querySelectorAll(".thumbs").forEach(r => { r.scrollLeft = stripScroll[r.dataset.key] || 0; });
+  $("nextRow").replaceChildren(...next.map(p => tile(p, pages.indexOf(p))));
+  $("nextStrip").hidden = !next.length;
   $("nextCount").textContent = next.length ? `(${next.length})` : "";
   $("thumbHint").hidden = !pages.length;
+  $("thumbHint").textContent = docs.length > 1 || needs.length ? "Tap a page to see it full size, or to move it to another document." : "Tap a page to see it full size.";
   requestAnimationFrame(updateThumbNav);
   $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
   setRemoveLabel();
@@ -684,17 +771,18 @@ function markThumb(i, state, text = "") {
 // With more pages than fit in a row, a slider under it shows where you are
 // and scrolls it ("Uploads 4-6 of 13").
 function updateThumbNav() {
-  for (const row of [$("doneRow"), $("nextRow")]) {
+  for (const row of $("thumbs").querySelectorAll(".thumbs")) {
     const nav = row.nextElementSibling, max = row.scrollWidth - row.clientWidth;
     nav.hidden = max <= 4;
     if (max <= 4) continue;
     nav.querySelector("input").value = Math.round(row.scrollLeft / max * 1000);
     const r = row.getBoundingClientRect();
-    const seen = [...row.children].filter(t => { const b = t.getBoundingClientRect(); return b.right > r.left + 8 && b.left < r.right - 8; }).map(t => +t.dataset.i + 1);
+    const seen = [...row.children].filter(t => { const b = t.getBoundingClientRect(); return b.right > r.left + 8 && b.left < r.right - 8; }).map(t => +(t.dataset.i ?? t.querySelector(".thumb").dataset.i) + 1);
     nav.querySelector("span").textContent = seen.length ? `Uploads ${seen[0]}${seen.length > 1 ? "–" + seen[seen.length - 1] : ""} (${row.children.length} here)` : "";
   }
 }
-for (const row of [$("doneRow"), $("nextRow")]) {
+{
+  const row = $("nextRow");
   row.addEventListener("scroll", updateThumbNav, { passive: true });
   row.nextElementSibling.querySelector("input").addEventListener("input", e => {
     row.scrollLeft = e.target.value / 1000 * (row.scrollWidth - row.clientWidth);
@@ -719,6 +807,11 @@ function openViewer(i) {
       el("span", {}, `Upload ${i + 1} of ${pages.length}`),
       ...(i > 0 ? [btn("‹", () => openViewer(i - 1))] : []),
       ...(i < pages.length - 1 ? [btn("›", () => openViewer(i + 1))] : []),
+      ...(p.prepared && $("deviceCheck").hidden && sortIntoDocuments().docs.length ? [(() => {
+        const sel = docChoices(p, sortIntoDocuments().docs);
+        sel.onchange = () => { if (sel.value) { movePage(p, sel.value); openViewer(i); } };
+        return el("label", { className: "small", style: "display:flex;gap:6px;align-items:center;margin:0;color:#fff;font-weight:500" }, "Part of", sel);
+      })()] : []),
       btn("Remove", () => { closeViewer(); removePage(i); }),
       btn("Close", closeViewer)),
     el("div", { className: "scroll" }, numbered(el("img", { src: p.small.toDataURL("image/jpeg", 0.85), alt: `Upload ${i + 1}` }), i + 1)));
@@ -749,7 +842,7 @@ async function addFiles(fileList) {
     setStatus(files.length > 1 ? `Adding photo ${n + 1} of ${files.length}…` : "Adding photo…", "busy");
     try {
       const small = await toCanvas(f, MAX_EDGE);
-      pages.push({ full: small, small });
+      pages.push({ full: small, small, order: ++pageOrder });
       renderPages();
       $("scanBtn").disabled = $("clearBtn").disabled = true;
     } catch { failed.push(f.name || `photo ${n + 1}`); }
@@ -816,7 +909,7 @@ function resetPages() {
   if (prepBusy) { ocrWorker?.terminate?.(); ocrWorker = null; }
   prepGen++; prepBusy = 0; prepQueue = peopleQueue = Promise.resolve(); prepNote("");
   closeWebcam();
-  pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
+  pages = []; laterDocs = []; docOf = { n: 1, total: 1 }; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
   $("scanBtn").disabled = false;
   renderPages(); setStatus("");
@@ -1203,6 +1296,20 @@ $("scanBtn").onclick = async () => {
   $("scanBtn").disabled = pages.length === 0;
   processing = false; $("thumbs").classList.remove("busy"); setRemoveLabel();
   if (!prepBusy) stayAwake(false);
+  // More than one document: check and send them one at a time.
+  const { docs, needs } = sortIntoDocuments();
+  if (needs.length) {
+    renderPages();
+    setStatus(`Before processing, say which document ${needs.length > 1 ? "each page" : "the page"} in "Needs checking" belongs to.`, "error");
+    $("docBoxes").querySelector(".needs")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (docs.length > 1) {
+    laterDocs = docs.slice(1);
+    docOf = { n: 1, total: docs.length, label: docs[0].label };
+    pages = docs[0].pages;
+    renderPages();
+  } else if (!laterDocs.length && docOf.n === 1) docOf = { n: 1, total: 1 };
   pages.forEach(p => { p.local = p.local || []; prepMark(p, "", true); });
   pages.forEach((p, i) => p.local.forEach(b => { b.page = i + 1; }));
   setStatus("");
@@ -1236,7 +1343,7 @@ function afterChecks() {
   }
   // Card receipts follow the owner's standing choice, if they've made one.
   const receiptPref = store.get("porter.receipts") || "ask";
-  const isReceipt = p => !p.keep && !p.unchecked && notCarKind(p.ocrText || "") === RECEIPT;
+  const isReceipt = p => !p.keep && !p.unchecked && isCardReceipt(p.ocrText || "");
   if (receiptPref === "keep") pages.forEach(p => { if (isReceipt(p)) p.keep = true; });
   if (receiptPref === "drop" && !blocked.length && pages.some(isReceipt)) {
     const left = pages.map((p, i) => isReceipt(p) && i + 1).filter(Boolean);
@@ -1265,7 +1372,7 @@ function afterChecks() {
 }
 function removePages(drop) {
   const keep = pages.filter((p, i) => !drop(p, i));
-  if (!keep.length) { resetPages(); setStatus("Removed. Nothing was sent."); return; }
+  if (!keep.length) { nextDocOrReset("Removed. Nothing was sent."); return; }
   pages = keep;
   pages.forEach((p, i) => p.local.forEach(b => { b.page = i + 1; }));
   renderPages();
@@ -1290,7 +1397,7 @@ const LOOKS_LIKE = [
   ["a medical letter or prescription", /\b(nhs|patient|prescription|surgery|hospital|clinic|dosage)\b/i],
   ["a phone bill", /\b(minutes|data allowance|roaming|mobile plan)\b/i],
   ["an identity document", /\b(passport|nationality|place of birth)\b/i],
-  [RECEIPT, /\b(contactless|auth(orisation)?\s*code|merchant|card\s*holder|pan\s*seq|visa|mastercard|maestro|amex|debit|credit card|pin verified|approved|terminal)\b/i],
+  [RECEIPT, /\b(contactless|auth(orisation)?\s*code|merchant|card\s*holder(\s*copy)?|customer\s*copy|pan\s*seq|visa|mastercard|maestro|amex|debit|credit card|pin verified|verified by pin|please retain|approved|terminal|receipt|icc|aid)\b/i],
   ["a shop receipt", /\b(tesco|sainsbury'?s|asda|aldi|lidl|morrisons|waitrose|co-?op|change due|cashier|clubcard)\b/i],
 ];
 // What a page looks like, if it doesn't look like car paperwork; null if it does.
@@ -1301,8 +1408,12 @@ function notCarKind(text) {
   const hits = new Set((text.toLowerCase().match(VEHICLE_WORDS) || []));
   if (hits.size + (UK_PLATE.test(text) ? 2 : 0) >= 2) return null;
   const kind = LOOKS_LIKE.map(([name, re]) => [name, (text.match(new RegExp(re.source, "gi")) || []).length]).sort((a, b) => b[1] - a[1])[0];
+  if (kind[0] === RECEIPT && hits.size) return null;   // a garage's own card receipt is car paperwork
   return kind[1] ? kind[0] : "other";
 }
+// A card payment slip, whoever it's from (the owner's choice about receipts
+// applies to all of them).
+const isCardReceipt = text => (text.match(new RegExp(LOOKS_LIKE.find(([n]) => n === RECEIPT)[1].source, "gi")) || []).length >= 2;
 let ocrFailedLast = false, confirmedForCar = false;
 function rememberReceipts(choice) {
   if ($("notCarRememberRow").hidden || !$("notCarRemember").checked) return;
@@ -1324,23 +1435,40 @@ function setDrawing(on) {
 $("drawBtn").onclick = () => setDrawing(!drawing);
 $("saveAnyway").onclick = () => { saveVisit(result); $("saveAsk").hidden = true; $("resultTitle").textContent = "Saved to your history"; showJustAdded(false); };
 $("dontSave").onclick = () => { $("saveAsk").hidden = true; $("resultTitle").textContent = "Not saved"; };
-$("backBtn").onclick = () => { $("deviceCheck").hidden = true; $("addCard").hidden = false; setDrawing(false); scrollTo({ top: 0 }); };
-$("cancelBtn").onclick = () => {
-  if (!confirm(`Cancel and remove ${pages.length > 1 ? `these ${pages.length} pages` : "this page"}? Nothing will be saved.`)) return;
-  resetPages(); setStatus("Cancelled. Nothing was saved."); scrollTo({ top: 0 });
+// Back to photos puts every waiting document back together, so pages can be
+// moved between them; Cancel and Done move on to the next document, if any.
+$("backBtn").onclick = () => {
+  if (laterDocs.length) { pages = [...pages, ...laterDocs.flatMap(d => d.pages)].sort((a, b) => a.order - b.order); laterDocs = []; docOf = { n: 1, total: 1 }; renderPages(); }
+  $("deviceCheck").hidden = true; $("addCard").hidden = false; setDrawing(false); scrollTo({ top: 0 });
 };
-$("doneBtn").onclick = () => { resetPages(); $("justAdded").hidden = true; scrollTo({ top: 0 }); };
+$("cancelBtn").onclick = () => {
+  const these = pages.length > 1 ? `these ${pages.length} pages` : "this page";
+  if (!confirm(laterDocs.length ? `Cancel this document and remove ${these}? Your other documents stay.` : `Cancel and remove ${these}? Nothing will be saved.`)) return;
+  nextDocOrReset("Cancelled. Nothing was saved."); scrollTo({ top: 0 });
+};
+function nextDocOrReset(said = "") {
+  const rest = laterDocs, n = docOf.n, total = docOf.total;
+  resetPages();
+  if (!rest.length) { if (said) setStatus(said); return; }
+  const d = rest.shift();
+  laterDocs = rest; docOf = { n: n + 1, total, label: d.label };
+  pages = d.pages;
+  renderPages();
+  setStatus(`${said ? said + " " : ""}Next: ${d.label} (document ${n + 1} of ${total}, ${d.pages.length} page${d.pages.length > 1 ? "s" : ""}). Tap Process to check and send it.`);
+}
+$("doneBtn").onclick = () => { nextDocOrReset(); $("justAdded").hidden = true; scrollTo({ top: 0 }); };
 // After a scan is saved, History is where you land: the new visit opens at
 // the top, under a short note of what happened and what to do next.
 function showJustAdded(warn) {
   $("justAddedText").textContent = $("resultStatus").textContent;
+  $("scanAnother").textContent = laterDocs.length ? `Next: ${laterDocs[0].label}` : "Add another";
   $("justAddedText").className = "small" + (warn ? " status error" : "");
   $("justAdded").hidden = false;
   showTab("history");
   scrollTo({ top: 0 });
 }
 $("seeRedaction").onclick = () => { showTab("scan"); $("redactionBox").open = true; $("redactionBox").scrollIntoView({ block: "start" }); };
-$("scanAnother").onclick = () => { resetPages(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 }); };
+$("scanAnother").onclick = () => { nextDocOrReset(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 }); };
 
 function paintCheck(c, p, draft) {
   const ctx = c.getContext("2d");
@@ -1361,19 +1489,22 @@ function checkSummary() {
   const bizOff = all.filter(b => b.business && !b.on).length;
   const found = all.filter(b => b.source === "device").length;
   $("checkLead").textContent = found
-    ? "Your phone found these personal details and will black them out before the pages leave it."
+    ? "Your phone found these personal details and will redact them before the pages leave it."
     : "Your phone didn't find any personal details on " + (pages.length > 1 ? "these pages." : "this page.");
   const leftOpen = "";
   const youOff = all.length - on - bizOff;
   $("checkSummary").textContent = on
-    ? `${on} area${on === 1 ? "" : "s"} will be blacked out${youOff > 0 ? `, ${youOff} uncovered by you` : ""}. Faint boxes turn solid black when sent.${leftOpen}`
-    : found ? "Nothing will be blacked out: you've uncovered everything your phone found."
-    : "No personal details found, so nothing needs blacking out. If you can see any, tap Draw a box and cover them.";
-  $("sendBtn").textContent = on ? "Send blacked-out pages" : "Send pages";
+    ? `${on} area${on === 1 ? "" : "s"} will be redacted${youOff > 0 ? `, ${youOff} uncovered by you` : ""}. Faint boxes turn solid black when sent.${leftOpen}`
+    : found ? "Nothing will be redacted: you've uncovered everything your phone found."
+    : "No personal details found, so nothing needs redacting. If you can see any, tap Draw a box and cover them.";
+  $("sendBtn").textContent = on ? "Send redacted pages" : "Send pages";
 }
 
 function showDeviceCheck() {
   $("addCard").hidden = true;
+  $("docNote").hidden = docOf.total < 2;
+  $("docNote").textContent = docOf.total < 2 ? "" : `Document ${docOf.n} of ${docOf.total}: ${docOf.label}` +
+    (laterDocs.length ? `. ${laterDocs[0].label} is next, once this one's done.` : ".");
   $("checkCanvases").replaceChildren(...pages.map((p, i) => {
     const c = el("canvas", { width: p.small.width, height: p.small.height, ariaLabel: `Page ${i + 1}` });
     paintCheck(c, p);
@@ -1446,7 +1577,7 @@ function forSending(p) {
   return { canvas: c, scale: c.width / src.width };
 }
 
-// Step 3: only the blacked-out pages leave the phone.
+// Step 3: only the redacted pages leave the phone.
 function blackedOut(p) {
   const c = el("canvas", { width: p.small.width, height: p.small.height });
   const ctx = c.getContext("2d");
@@ -1482,7 +1613,7 @@ $("sendBtn").onclick = async () => {
   };
 
   $("sendBtn").disabled = true;
-  setStatus("Reading the blacked-out pages… (10-60 seconds)", "busy", status);
+  setStatus("Sent the redacted pages. AI is pulling out the service details… (10-60 seconds)", "busy", status);
   try {
     const msg = await callClaude(cred, body);
     if (sendRun !== runId) return;   // the pages were removed while this was out
@@ -1518,9 +1649,10 @@ $("sendBtn").onclick = async () => {
     if (askFirst) $("saveAskText").textContent = `This looks like ${result.looks_like || "something that isn't about a car"}, not a car document.`;
     else saveVisit(result);
     $("resultTitle").textContent = askFirst ? "Read, not saved yet" : "Saved to your history";
+    $("doneBtn").textContent = laterDocs.length ? `Done: next is ${laterDocs[0].label}` : "Done: add another document";
     setStatus(aiFound
-      ? `Your phone missed ${aiFound} personal detail${aiFound === 1 ? "" : "s"} (purple boxes under "Blacked-out pages"), so ${aiFound === 1 ? "it was" : "they were"} included in what was sent to AI. ${aiFound === 1 ? "It's" : "They're"} covered now in anything you keep or share. Cost about $${usd.toFixed(2)}.`
-      : `Your phone blacked out everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. Cost about $${usd.toFixed(2)}.`,
+      ? `Your phone missed ${aiFound} personal detail${aiFound === 1 ? "" : "s"} (purple boxes under "Redacted pages"), so ${aiFound === 1 ? "it was" : "they were"} included in what was sent to AI. ${aiFound === 1 ? "It's" : "They're"} covered now in anything you keep or share. Cost about $${usd.toFixed(2)}.`
+      : `Your phone redacted everything AI could see${added ? `, plus ${added} from the cross-check` : ""}. Cost about $${usd.toFixed(2)}.`,
       aiFound ? "error" : "", $("resultStatus"));
     $("redactionBox").open = aiFound > 0;
     if (askFirst) scrollTo({ top: 0 });
@@ -1792,7 +1924,7 @@ function visitEntry(v) {
     if (notes.length) body.append(el("p", { className: "small" }, `🗣️ ${notes.length} mechanic's note${notes.length === 1 ? "" : "s"}: ` + notes.map(n => n.parsed.summary).join("; ")));
     const actions = el("div", { className: "row", style: "margin-top:8px" });
     if (v.keptPages) {
-      const view = el("button", { type: "button", className: "linkbtn small" }, `📄 View ${v.keptPages} blacked-out page${v.keptPages === 1 ? "" : "s"}`);
+      const view = el("button", { type: "button", className: "linkbtn small" }, `📄 View ${v.keptPages} redacted page${v.keptPages === 1 ? "" : "s"}`);
       view.onclick = () => openKeptPages(v);
       actions.append(view);
     }
@@ -1817,7 +1949,7 @@ async function openKeptPages(v) {
   closeViewer();
   const urls = kept.map(p => URL.createObjectURL(p.blob));
   const close = el("button", { type: "button" }, "Close");
-  const viewer = el("div", { id: "viewer", role: "dialog", ariaLabel: "Blacked-out pages" },
+  const viewer = el("div", { id: "viewer", role: "dialog", ariaLabel: "Redacted pages" },
     el("div", { className: "bar" }, el("span", {}, `${niceDate(v.date)} · ${urls.length} page${urls.length === 1 ? "" : "s"}`), close),
     el("div", { className: "scroll" }, ...urls.map(u => el("img", { src: u, alt: "" }))));
   close.onclick = () => { closeViewer(); urls.forEach(URL.revokeObjectURL); };
@@ -2113,7 +2245,7 @@ $("copyBtn").onclick = async () => {
 };
 
 // Redacted copies of the original documents, kept only when the owner asks
-// (after checking the boxes). Only the owner's personal data is blacked out:
+// (after checking the boxes). Only the owner's personal data is redacted:
 // buyers usually get the paper originals anyway, so the registration, VIN and
 // prices stay visible whatever the summary shows. IndexedDB, since images
 // outgrow localStorage; memory only if it's unavailable.
@@ -2181,7 +2313,7 @@ async function renderSaleDocs(visits) {
   if (token !== docsRender || !figures.length) return;
   $("saleSheet").append(el("div", { className: "docs-section" },
     el("h4", {}, "Original documents"),
-    el("p", { className: "muted small" }, "As issued, with the owner's personal details blacked out."),
+    el("p", { className: "muted small" }, "As issued, with the owner's personal details redacted."),
     el("div", { className: "docs" }, ...figures)));
 }
 
