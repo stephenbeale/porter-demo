@@ -227,7 +227,7 @@ details > summary { font-weight: 600; }
         <div class="thumbnav" hidden><input type="range" min="0" max="1000" value="0" aria-label="Scroll through processed pages"><span class="small muted"></span></div>
       </div>
       <div class="strip" id="nextStrip" hidden>
-        <p class="strip-label small"><b>Next up</b> <span class="muted" id="nextCount"></span></p>
+        <p class="strip-label small"><b>Next up</b> <span class="muted" id="nextCount"></span> <span class="muted" id="prepNote"></span></p>
         <div class="thumbs" id="nextRow"></div>
         <div class="thumbnav" hidden><input type="range" min="0" max="1000" value="0" aria-label="Scroll through pages still to process"><span class="small muted"></span></div>
       </div>
@@ -814,7 +814,7 @@ function stopRun() {
 function resetPages() {
   stopRun();
   if (prepBusy) { ocrWorker?.terminate?.(); ocrWorker = null; }
-  prepGen++; prepBusy = 0; prepQueue = Promise.resolve();
+  prepGen++; prepBusy = 0; prepQueue = peopleQueue = Promise.resolve(); prepNote("");
   closeWebcam();
   pages = []; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
@@ -896,10 +896,14 @@ async function recognizeUpright(worker, src, say = () => {}, straightened = fals
 // still looking through them. First pass: every new page is turned upright
 // (the thumbnail visibly turns). Second pass: each page is read for personal
 // details and checked for people. Process then only waits for whatever's left.
-let prepQueue = Promise.resolve(), prepGen = 0, prepBusy = 0;
+let prepQueue = Promise.resolve(), peopleQueue = Promise.resolve(), prepGen = 0, prepBusy = 0;
+const prepNote = text => { $("prepNote").textContent = text ? `· ${text}` : ""; };
+// Only the page actually being worked on shows a spinner; the others in
+// Next up are just waiting their turn.
 function prepMark(p, text, done) {
   const i = pages.indexOf(p);
   if (i < 0) return;
+  if (!done && !processing) prepNote(`working on upload ${i + 1}`);
   if (done) markThumb(i, p.unchecked ? "busy" : "done", p.unchecked ? "Not checked" : "✓");
   else markThumb(i, processing ? "busy" : "busy bg", text);
   if (processing && !done) setStatus(`${pausedNote}Processing upload ${i + 1} of ${pages.length}${text.match(/\d+%/) ? ` (${text.match(/\d+%/)[0]})` : "…"}`, "busy");
@@ -931,8 +935,9 @@ async function straighten(p, gen) {
     if (best.rot) await turnThumb(p, best.rot);
     p.straightened = true;
   } catch {}   // the read below still checks each way up if this couldn't
+  finally { if (!p.prepared && pages.includes(p)) markThumb(pages.indexOf(p), processing ? "waiting" : null, processing ? "Waiting" : ""); }
 }
-async function readPage(p, gen, people) {
+async function readPage(p, gen) {
   const stale = () => gen !== prepGen || !pages.includes(p);
   if (p.prepared || stale()) return;
   prepMark(p, "Processing…");
@@ -952,8 +957,21 @@ async function readPage(p, gen, people) {
     if (err.message !== "timeout") p.ocrError = err.message;
   } finally { ocrProgress = () => {}; }
   p.read = true;
+  if (!stale()) markThumb(pages.indexOf(p), processing ? "waiting" : null, processing ? "Waiting" : "");
+}
+// The people check runs alongside, so a slow first download of its engine
+// never holds up reading the other pages; and it gives up after two minutes
+// (Process then asks the owner to check for people themselves).
+async function checkPeople(p, gen, people) {
+  const stale = () => gen !== prepGen || !pages.includes(p);
+  if (p.prepared || stale()) return;
   try {
-    const h = await people;
+    let h = await Promise.race([people, new Promise(r => setTimeout(() => r(undefined), 300))]);
+    if (h === undefined) {
+      prepNote("getting the people check ready (first time only)");
+      if (processing) setStatus(`${pausedNote}Getting the people check ready (first time only, about 14 MB)…`, "busy");
+      h = await people;
+    }
     if (stale()) return;
     p.person = h ? personIn(await withTimeout(h.detect(p.small), OCR_PAGE_TIMEOUT_MS)) : null;
     p.peopleChecked = !!h;
@@ -966,13 +984,18 @@ async function readPage(p, gen, people) {
 function queuePrepare(added) {
   const gen = prepGen, todo = added.filter(p => !p.prepared);
   if (!todo.length) return;
-  const people = getPeopleDetector().catch(() => null);
-  const run = f => { prepQueue = prepQueue.then(() => gen === prepGen && f()).catch(() => {}); };
+  const people = withTimeout(getPeopleDetector(), 120000).catch(() => null);
+  const run = f => { prepQueue = prepQueue.then(() => gen === prepGen && f()).catch(() => {}); return prepQueue; };
   prepBusy++; stayAwake(true);
   for (const p of todo) run(() => straighten(p, gen));
-  for (const p of todo) run(() => readPage(p, gen, people));
-  run(() => {});
-  prepQueue = prepQueue.then(() => { if (!--prepBusy && !processing) stayAwake(false); });
+  for (const p of todo) {
+    const read = run(() => readPage(p, gen));
+    peopleQueue = Promise.all([peopleQueue, read]).then(() => gen === prepGen && checkPeople(p, gen, people)).catch(() => {});
+  }
+  let peopleReady = false;
+  people.then(h => { peopleReady = !!h; });
+  run(() => { if (todo.some(p => !p.prepared && pages.includes(p))) prepNote(peopleReady ? "checking for people" : "getting the people check ready (first time only)"); });
+  Promise.all([prepQueue, peopleQueue]).then(() => { if (gen === prepGen && !--prepBusy) { prepNote(""); if (!processing) stayAwake(false); } });
 }
 
 // A page that takes too long is skipped (the owner covers it by hand) and the
@@ -1175,7 +1198,7 @@ $("scanBtn").onclick = async () => {
   pages.forEach((p, i) => p.prepared ? prepMark(p, "", true) : markThumb(i, "waiting", "Waiting"));
   setStatus(pages.every(p => p.prepared) ? "" : "Processing… (the on-phone checks download about 14 MB the first time). Keep this screen open: phones pause web pages when locked.", "busy");
   queuePrepare(pages);   // anything not already done or queued
-  await Promise.race([prepQueue, stopped]).catch(() => {});
+  await Promise.race([Promise.all([prepQueue, peopleQueue]), stopped]).catch(() => {});
   if (!live()) return;
   $("scanBtn").disabled = pages.length === 0;
   processing = false; $("thumbs").classList.remove("busy"); setRemoveLabel();
