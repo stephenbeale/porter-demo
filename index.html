@@ -543,7 +543,7 @@ async function addFiles(fileList) {
   for (const [n, f] of files.entries()) {
     setStatus(files.length > 1 ? `Adding photo ${n + 1} of ${files.length}…` : "Adding photo…", "busy");
     try {
-      const full = await toCanvas(f, 3000);   // cap memory on phones
+      const full = await toCanvas(f, 2000);   // legible to check by eye when zoomed; no need for print quality
       const small = await toCanvas(f, MAX_EDGE);
       pages.push({ full, small });
       renderPages();
@@ -1083,7 +1083,7 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
 $("downloadBtn").onclick = () => {
   pages.forEach((_, i) => {
     const a = document.createElement("a");
-    a.href = drawPage(i, "redacted").toDataURL("image/jpeg", 0.9);
+    a.href = drawPage(i, "redacted").toDataURL("image/jpeg", JPEG_QUALITY);
     a.download = `porter-redacted-p${i + 1}.jpg`;
     a.click();
   });
@@ -1529,7 +1529,7 @@ $("keepBtn").onclick = async () => {
     const scale = Math.min(1, STORED_EDGE / Math.max(red.width, red.height));
     const c = el("canvas", { width: Math.round(red.width * scale), height: Math.round(red.height * scale) });
     c.getContext("2d").drawImage(red, 0, 0, c.width, c.height);
-    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", JPEG_QUALITY));
     return { blob };
   }));
   const durable = await pageStore.set(v.id, kept);
