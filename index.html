@@ -394,7 +394,7 @@ h3.panel-head { justify-content: flex-start; }
   </section>
 
   <section class="card" id="addCard" data-tab="scan">
-    <div class="car-bar"><h2>Add pages of one document</h2><div class="plate-wrap plate-copy" hidden></div></div>
+    <div class="car-bar"><h2>Add documents</h2><div class="plate-wrap plate-copy" hidden></div></div>
     <div class="ask small" id="addingTo" hidden><span id="addingToText"></span> <a href="#" id="stopAdding">Make it a new visit instead</a></div>
     <label class="small" id="forJobRow" style="display:flex;gap:8px;align-items:center;margin:0 0 10px;font-weight:600">This is for <select id="forJob" style="width:auto;flex:1;min-width:0;margin:0;font-size:14px;padding:6px"></select></label>
     <div class="row">
@@ -742,7 +742,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-33";
+const APP_VERSION = "2026.10.31-34";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1092,7 +1092,8 @@ function anchorsOf(p) {
   if (p.anchors && p.anchors.text === p.ocrText) return p.anchors;
   const t = p.ocrText || "", biz = [];
   let label = "";
-  const name = t.split("\n").slice(0, 12).join("\n").match(BIZ_NAME);
+  let name = t.split("\n").slice(0, 12).join("\n").match(BIZ_NAME);
+  if (name && /\b(replaced?|fitted|supplied|both|front|rear|due|code|check(ed)?|new|engine|nearside|offside)\b/i.test(name[1])) name = null;
   if (name) { biz.push("n:" + name[1].toLowerCase().replace(/[’']s\b/g, "s").replace(/\b(ltd|limited)\b/g, "").replace(/[^a-z]/g, "")); label = titleCase(name[1].trim()); }
   for (const m of t.matchAll(/\b(?:www\.)?([a-z0-9-]{3,})\.(?:co\.uk|com|uk|net|org)\b/gi)) {
     const d = m[1].toLowerCase();
@@ -1119,13 +1120,13 @@ function sortIntoDocuments() {
   const done = pages.filter(p => p.prepared).sort((a, b) => a.order - b.order);
   const docs = [], loose = [];
   const add = (d, p, a) => { d.pages.push(p); if (a) { a.biz.forEach(k => d.biz.add(k)); a.inv && d.invs.add(a.inv); a.date && d.dates.add(a.date); d.label ||= a.label; } };
-  const make = id => { const d = { id, pages: [], label: "", biz: new Set(), invs: new Set(), dates: new Set() }; docs.push(d); return d; };
+  const make = (id, manual) => { const d = { id, manual, pages: [], label: "", biz: new Set(), invs: new Set(), dates: new Set() }; docs.push(d); return d; };
   for (const p of done) {
-    if (p.manualDoc) { add(docs.find(d => d.id === p.manualDoc) || make(p.manualDoc), p); continue; }
+    if (p.manualDoc) { const d = docs.find(d => d.id === p.manualDoc) || make(p.manualDoc, true); d.label ||= p.docLabel || ""; add(d, p); continue; }
     const a = anchorsOf(p);
     if (!a.keys.length) { loose.push(p); continue; }
     const id = a.inv || a.biz[0] + (a.date ? "@" + a.date : "");
-    add(docs.findLast(d => !d.id.startsWith("new:") && belongsTo(d, a)) || docs.find(d => d.id === id) || make(id), p, a);
+    add(docs.findLast(d => !d.manual && belongsTo(d, a)) || docs.find(d => d.id === id) || make(id), p, a);
   }
   // Two documents that turned out to share an invoice number are one.
   for (let i = docs.length - 1; i > 0; i--) {
@@ -1193,15 +1194,17 @@ function renderPages() {
       ...(cls === "needs" ? [el("p", { className: "small muted", style: "margin:2px 0 0" }, "Which document is each of these part of?")] : []),
       row, el("div", { className: "thumbnav", hidden: true }, range, el("span", { className: "small muted" })));
   };
-  $("docBoxes").replaceChildren(
-    ...docs.map(d => box(d.id, d.label || (docOf.total > 1 && docOf.label) || "Processed", d.pages)),
-    ...(needs.length ? [box("needs", "Needs checking", needs, p => docChoices(p, docs), "needs")] : []));
+  const unsorted = !batchSorted && pages.length >= SORT_AT;
+  $("docBoxes").replaceChildren(...(unsorted
+    ? (docs.length || needs.length ? [box("read", "Read on your phone", [...docs.flatMap(d => d.pages), ...needs].sort((a, b) => a.order - b.order))] : [])
+    : [...docs.map(d => box(d.id, d.label || (docOf.total > 1 && docOf.label) || "Processed", d.pages)),
+       ...(needs.length ? [box("needs", "Needs checking", needs, p => docChoices(p, docs), "needs")] : [])]));
   $("docBoxes").querySelectorAll(".thumbs").forEach(r => { r.scrollLeft = stripScroll[r.dataset.key] || 0; });
   $("nextRow").replaceChildren(...next.map(p => tile(p, pages.indexOf(p))));
   $("nextStrip").hidden = !next.length;
   $("nextCount").textContent = next.length ? `(${next.length})` : "";
   $("thumbHint").hidden = !pages.length;
-  $("thumbHint").textContent = (docs.length > 1 ? `These look like ${docs.length} different visits${next.length ? " so far" : ""}, so Porter will read them one at a time, each saved as its own job. ` : "") +
+  $("thumbHint").textContent = unsorted ? "Tap Process when you've added everything: Porter sorts the photos into visits, leaves out repeats, and reads each visit as its own job. Tap a page to see it full size." : (docs.length > 1 ? `These look like ${docs.length} different visits${next.length ? " so far" : ""}, so Porter will read them one at a time, each saved as its own job. ` : "") +
     (docs.length > 1 || needs.length ? "Tap a page to see it full size, or to move it to another visit." : "Tap a page to see it full size.");
   requestAnimationFrame(updateThumbNav);
   $("scanBtn").hidden = $("clearBtn").hidden = !pages.length;
@@ -1458,7 +1461,7 @@ function resetPages() {
   prepGen++; prepBusy = 0; prepQueue = peopleQueue = Promise.resolve(); prepNote("");
   closeWebcam();
   $("cropAsk").hidden = $("dupeAsk").hidden = true;
-  pages = []; laterDocs = []; docOf = { n: 1, total: 1 }; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
+  pages = []; laterDocs = []; docOf = { n: 1, total: 1 }; result = null; batchSorted = false; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
   $("scanBtn").disabled = false;
   renderPages(); setStatus("");
@@ -1641,6 +1644,50 @@ $("dupeNo").onclick = () => {
   for (const p of pages) if (p.read) p.dupeOk = true;
   renderPages(); offerDupes();
 };
+// Big batches: once the phone has read and redacted every photo, AI looks at
+// small redacted copies and sorts them into visits (one invoice, receipt or
+// MOT each) and spots repeat photos. Its answer only groups the pages; each
+// visit is then read properly on its own. If it fails, the phone's own
+// grouping is used.
+const SORT_AT = 4;
+let batchSorted = false;   // groups are shown once the batch has been sorted
+const SORT_SCHEMA = { type: "object", properties: {
+  visits: { type: "array", items: { type: "object", properties: {
+    label: { type: "string", description: "Garage, seller or issuer, e.g. 'Smith Motors' or 'MOT certificate'; empty if unknown" },
+    date: { type: "string", description: "The document's date as YYYY-MM-DD, or empty" },
+    uploads: { type: "array", items: { type: "integer" }, description: "Upload numbers in this visit, in page order" } },
+    required: ["label", "date", "uploads"], additionalProperties: false } },
+  repeats: { type: "array", items: { type: "integer" }, description: "Uploads that are a less clear repeat photo of another upload" } },
+  required: ["visits", "repeats"], additionalProperties: false };
+function sortImage(p) {
+  const src = blackedOut(p), k = Math.min(1, 1000 / Math.max(src.width, src.height));
+  const c = el("canvas", { width: Math.round(src.width * k), height: Math.round(src.height * k) });
+  c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.6).split(",")[1];
+}
+async function sortWithAi(cred) {
+  const content = [];
+  pages.forEach((p, i) => content.push({ type: "text", text: `Upload ${i + 1}:` }, { type: "image", source: { type: "base64", media_type: "image/jpeg", data: sortImage(p) } }));
+  content.push({ type: "text", text: `Sort these ${pages.length} uploads into visits.` });
+  const msg = await callClaude(cred, { model: "claude-haiku-5-5", max_tokens: 4000,
+    system: "A car owner photographed a pile of car paperwork (personal details are blacked out). Sort the photos into visits: each garage invoice, MOT certificate, receipt or parts purchase is its own visit, with all of its pages. Separate invoices are separate visits, even from the same garage. A card receipt paying an invoice goes with that invoice. When the same page was photographed more than once, keep all of them in its visit and list the less clear copies under repeats. Every upload goes in exactly one visit. Order visits as the uploads come.",
+    output_config: { format: { type: "json_schema", schema: SORT_SCHEMA } },
+    messages: [{ role: "user", content }] });
+  const out = JSON.parse(msg.content.find(b => b.type === "text")?.text || "{}");
+  const n = pages.length, seen = new Set();
+  const visits = (out.visits || []).map(v => ({ ...v, uploads: v.uploads.filter(u => u >= 1 && u <= n && !seen.has(u) && seen.add(u)) })).filter(v => v.uploads.length);
+  if (!visits.length || seen.size < n * 0.8) throw new Error("incomplete sort");
+  visits.forEach((v, k) => v.uploads.forEach(u => {
+    const p = pages[u - 1];
+    p.manualDoc = `ai:${k + 1}`;
+    p.docLabel = [v.label.trim(), /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? niceDate(v.date) : ""].filter(Boolean).join(" · ");
+  }));
+  const repeats = new Set((out.repeats || []).filter(u => u >= 1 && u <= n).map(u => pages[u - 1]));
+  // never drop every photo of a visit
+  for (const v of visits) if (v.uploads.every(u => repeats.has(pages[u - 1]))) repeats.delete(pages[v.uploads[0] - 1]);
+  return repeats;
+}
+
 // On Process: leave out the repeat photos (not the clearest of each set).
 function dropRepeats() {
   const { extra } = findDupes();
@@ -1655,7 +1702,7 @@ function offerCrops() {
   $("cropAsk").hidden = !todo.length || !$("deviceCheck").hidden;
   if (!todo.length) return;
   const nums = todo.map(p => pages.indexOf(p) + 1);
-  $("cropAskText").textContent = `${todo.length > 1 ? `Uploads ${nums.join(", ")} have` : `Upload ${nums[0]} has`} a lot of background around the paperwork. Crop ${todo.length > 1 ? "them" : "it"} to the paperwork? Tighter pages read better, and cost less to send.`;
+  $("cropAskText").textContent = `${todo.length > 5 ? `${todo.length} photos have` : todo.length > 1 ? `Uploads ${nums.join(", ")} have` : `Upload ${nums[0]} has`} a lot of background around the paperwork. Crop ${todo.length > 1 ? "them" : "it"} to the paperwork? Tighter pages read better, and cost less to send.`;
 }
 async function readPage(p, gen) {
   const stale = () => gen !== prepGen || !pages.includes(p);
@@ -1929,11 +1976,21 @@ $("scanBtn").onclick = async () => {
   $("scanBtn").disabled = pages.length === 0;
   processing = false; $("thumbs").classList.remove("busy"); setRemoveLabel();
   if (!prepBusy) stayAwake(false);
-  const repeats = dropRepeats();
+  let repeats = dropRepeats();
+  const big = pages.length >= SORT_AT && !pages.every(p => p.manualDoc);
+  if (big) {
+    setStatus(`Sorting ${pages.length} photos into visits…`, "busy");
+    try {
+      const extra = await sortWithAi(credentials($("status")));
+      if (!live()) return;
+      if (extra.size) { pages = pages.filter(p => !extra.has(p)); repeats += extra.size; }
+    } catch (err) { if (!live()) return; }
+  }
+  if (big || pages.length >= SORT_AT) batchSorted = true;
   // More than one document: check and send them one at a time.
   const { docs, needs } = sortIntoDocuments();
   if (repeats || docs.length > 1) toast([repeats && `Left out ${repeats} repeat photo${repeats === 1 ? "" : "s"}`,
-    docs.length > 1 && `${docs.length} visits found: doing them one at a time`].filter(Boolean).join(". "));
+    docs.length > 1 && `${docs.length} visits found: reading them one at a time`].filter(Boolean).join(". "));
   if (needs.length) {
     renderPages();
     setStatus(`Before processing, say which document ${needs.length > 1 ? "each page" : "the page"} in "Needs checking" belongs to.`, "error");
@@ -2217,7 +2274,7 @@ function checkSummary() {
 function showDeviceCheck() {
   $("addCard").hidden = true;
   $("docNote").hidden = docOf.total < 2;
-  $("docNote").textContent = docOf.total < 2 ? "" : `Document ${docOf.n} of ${docOf.total}: ${docOf.label}` +
+  $("docNote").textContent = docOf.total < 2 ? "" : `Visit ${docOf.n} of ${docOf.total}: ${docOf.label}` +
     (laterDocs.length ? `. ${laterDocs[0].label} is next, once this one's done.` : ".");
   $("checkCanvases").replaceChildren(...pages.map((p, i) => {
     const c = el("canvas", { width: p.small.width, height: p.small.height, ariaLabel: `Page ${i + 1}` });
