@@ -345,6 +345,12 @@ h3.panel-head { justify-content: flex-start; }
     <p class="small status error" id="connectProblem" hidden></p>
     <div class="card-head"><h2>Settings</h2><button class="hide-btn" id="hideSettings" type="button" aria-label="Hide settings">Hide <span aria-hidden="true">▲</span></button></div>
     <div id="inviteBox" hidden>
+      <div id="googleBox" hidden>
+        <div id="googleSignedIn" hidden><p class="key-ok" style="margin-top:0">✓ Signed in with Google as <span id="googleEmail"></span></p><p class="small"><a href="#" id="googleOut">Sign out</a></p></div>
+        <div id="googleSignIn"><p class="small" style="margin:0 0 8px">Sign in with the Google account you gave to whoever invited you. No API key needed.</p><div id="googleBtn"></div></div>
+        <p class="small" id="googleStatus"></p>
+        <p class="muted small" style="margin-top:10px">Or use an invite code:</p>
+      </div>
       <label for="invite">Invite code</label>
       <input id="invite" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. alice-7f3k">
       <p class="small" id="inviteStatus"></p>
@@ -367,7 +373,7 @@ h3.panel-head { justify-content: flex-start; }
         </details>
       </div>
       <p class="small" id="keySaved" hidden>✓ API key saved (<span id="keyHint"></span>) · <a href="#" id="changeKey">Change</a></p>
-      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are redacted on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">I have an invite code</a></span></p>
+      <p class="muted small">The key is stored only in this browser (localStorage) and sent only to api.anthropic.com. Pages are redacted on this phone first, then go straight to Anthropic; nothing is uploaded anywhere else. <a href="#" id="forget">Forget key</a><span id="useInviteWrap" hidden> · <a href="#" id="useInvite">Use Porter's beta server (Google sign-in or invite code)</a></span></p>
     </div>
     <label for="model">Model</label>
     <select id="model">
@@ -681,7 +687,7 @@ h3.panel-head { justify-content: flex-start; }
     <label for="motReg">Registration</label>
     <input id="motReg" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AB12 CDE">
     <div class="row" style="margin-top:10px"><button class="btn" id="motBtn" type="button">Import</button></div>
-    <p class="muted small" id="motNeedsServer" hidden>Needs an invite code: MOT lookups go through Porter's beta server.</p>
+    <p class="muted small" id="motNeedsServer" hidden>Needs Google sign-in or an invite code: MOT lookups go through Porter's beta server.</p>
     <div class="status" id="motStatus" role="status" aria-live="polite"></div>
     <div id="dueDates"></div>
   </section>
@@ -722,7 +728,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-27";
+const APP_VERSION = "2026.10.31-28";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -786,7 +792,7 @@ function markConnected(flash = false) {
     showKey(); showConnect();
     if (flash) {
       const link = $("settingsLink");
-      link.textContent = mode === "invite" ? "✓ Invite code accepted" : "✓ Key connected";
+      link.textContent = mode === "invite" ? (googleUser() ? "✓ Signed in with Google" : "✓ Invite code accepted") : "✓ Key connected";
       link.style.color = "var(--good)";
       clearTimeout(flashTimer);
       flashTimer = setTimeout(() => { link.style.color = ""; showConnect(); }, 4000);
@@ -865,9 +871,10 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 
-// Beta testers connect with an invite code through the Porter beta server
-// (porter repo, worker/), which holds the API key and caps spend. Set this to
-// the deployed Worker's URL; while it's empty, the page asks for an API key.
+// Beta testers connect through the Porter beta server (porter repo, worker/),
+// which holds the API key and caps spend. They sign in with Google (the
+// server checks the email against its allowlist) or use an invite code. Set
+// this to the deployed Worker's URL; while it's empty, the page asks for an API key.
 const BETA_SERVER = "";
 let mode = BETA_SERVER && store.get("porter.mode") !== "key" ? "invite" : "key";
 const params = new URLSearchParams(location.search);
@@ -887,19 +894,75 @@ function showMode() {
   $("motNeedsServer").hidden = mode === "invite";
   $("motBtn").disabled = mode !== "invite";
 }
-const setMode = m => e => { e.preventDefault(); mode = m; store.set("porter.mode", m); store.del("porter.connected"); showMode(); showConnect(); if (m === "invite") checkInvite(); };
+const setMode = m => e => { e.preventDefault(); mode = m; store.set("porter.mode", m); store.del("porter.connected"); showMode(); showConnect(); if (m === "invite") { showGoogle(); checkInvite(); } };
 $("useKey").onclick = setMode("key");
 $("useInvite").onclick = setMode("invite");
 $("invite").addEventListener("change", e => { store.set("porter.invite", e.target.value.trim()); checkInvite(); });
 
-const inviteHeaders = code => ({ "x-porter-invite": code });
+// Google sign-in for the beta server: Google Identity Services gives an ID
+// token (a signed note of who you are, valid for an hour) that the server
+// checks. Returning users get a fresh one silently (auto_select).
+const decodeJwt = t => { try { return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch { return null; } };
+function googleUser() {
+  const t = store.get("porter.googleIdToken");
+  const c = t && decodeJwt(t);
+  return c ? { token: t, email: c.email, fresh: c.exp * 1000 > Date.now() + 60_000 } : null;
+}
+function loadGis() {
+  if (window.google?.accounts) return Promise.resolve();
+  return new Promise((ok, bad) => { const sc = el("script", { src: "https://accounts.google.com/gsi/client" }); sc.onload = ok; sc.onerror = () => bad(new Error("couldn't load Google sign-in")); document.head.append(sc); });
+}
+let gisReady = null;
+function startGoogle() {
+  if (!BETA_SERVER || !googleClientId()) return Promise.resolve(false);
+  return gisReady ||= loadGis().then(() => {
+    google.accounts.id.initialize({ client_id: googleClientId(), auto_select: true, use_fedcm_for_prompt: true, cancel_on_tap_outside: false,
+      callback: r => { store.set("porter.googleIdToken", r.credential); showGoogle(); checkInvite(); } });
+    return true;
+  }).catch(err => { $("googleStatus").className = "small status error"; $("googleStatus").textContent = "Couldn't load Google sign-in: " + err.message; gisReady = null; return false; });
+}
+let googlePrompted = 0;
+async function refreshGoogle() {   // quietly ask Google for a new token (at most once a minute)
+  if (Date.now() - googlePrompted < 60_000 || !await startGoogle()) return;
+  googlePrompted = Date.now();
+  google.accounts.id.prompt();
+}
+function showGoogle() {
+  const on = !!(BETA_SERVER && googleClientId());
+  $("googleBox").hidden = !on;
+  if (!on) return;
+  const u = googleUser();
+  $("googleSignedIn").hidden = !u;
+  $("googleSignIn").hidden = !!u;
+  $("googleEmail").textContent = u?.email || "";
+  if (!u && mode === "invite") startGoogle().then(ok => ok && !$("googleBtn").childElementCount &&
+    google.accounts.id.renderButton($("googleBtn"), { theme: matchMedia("(prefers-color-scheme: dark)").matches ? "filled_black" : "outline", size: "large", text: "signin_with", shape: "pill" }));
+}
+$("googleOut").onclick = e => {
+  e.preventDefault();
+  store.del("porter.googleIdToken"); store.del("porter.connected");
+  if (window.google?.accounts) google.accounts.id.disableAutoSelect();
+  $("googleStatus").textContent = ""; $("inviteStatus").textContent = "";
+  showGoogle(); showConnect();
+};
+
+// What to send the beta server: { server, google } or { server, invite }, or null.
+function serverCred() {
+  if (mode !== "invite" || !BETA_SERVER) return null;
+  const u = googleUser();
+  if (u?.fresh) return { server: true, google: u.token };
+  const invite = $("invite").value.trim();
+  if (invite) return { server: true, invite };
+  return null;
+}
+const inviteHeaders = cred => cred.google ? { authorization: "Bearer " + cred.google } : { "x-porter-invite": cred.invite };
 async function checkInvite() {
-  const code = $("invite").value.trim();
-  const out = $("inviteStatus");
-  out.className = "small"; out.textContent = "";
-  if (!code || !BETA_SERVER) return;
+  for (const id of ["inviteStatus", "googleStatus"]) { $(id).className = "small"; $(id).textContent = ""; }
+  const cred = serverCred();
+  if (!cred) { if (googleUser()) refreshGoogle(); return; }
+  const out = $(cred.google ? "googleStatus" : "inviteStatus");
   try {
-    const resp = await fetch(BETA_SERVER + "/v1/check", { headers: inviteHeaders(code) });
+    const resp = await fetch(BETA_SERVER + "/v1/check", { headers: inviteHeaders(cred) });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
     out.textContent = `Welcome, ${d.name}. $${d.remaining_usd.toFixed(2)} of today's allowance left.`;
@@ -911,10 +974,15 @@ async function checkInvite() {
 
 function credentials(statusEl) {
   if (mode === "invite") {
-    const invite = $("invite").value.trim();
-    if (!invite) { setStatus("Enter your invite code first.", "error", statusEl); $("invite").focus(); return null; }
-    store.set("porter.invite", invite);
-    return { invite };
+    const cred = serverCred();
+    if (cred) { if (cred.invite) store.set("porter.invite", cred.invite); return cred; }
+    if (googleUser()) {
+      refreshGoogle();
+      setStatus("Your Google sign-in has expired. Sign in again under Settings, then retry.", "error", statusEl);
+    } else setStatus(googleClientId() ? "Sign in with Google (or enter your invite code) under Settings first." : "Enter your invite code first.", "error", statusEl);
+    settingsOpen = true; showConnect(); showGoogle();
+    if (!googleClientId()) $("invite").focus();
+    return null;
   }
   const key = $("key").value.trim();
   if (!key) { setStatus("Enter your API key first.", "error", statusEl); $("key").focus(); return null; }
@@ -925,16 +993,17 @@ function credentials(statusEl) {
 
 async function callClaude(cred, body) {
   const headers = { "content-type": "application/json", "anthropic-version": API_VERSION };
-  if (cred.invite) Object.assign(headers, inviteHeaders(cred.invite));
+  if (cred.server) Object.assign(headers, inviteHeaders(cred));
   else Object.assign(headers, { "x-api-key": cred.key, "anthropic-dangerous-direct-browser-access": "true" });
   if (FALLBACK_MODELS.has(body.model)) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
-  const url = cred.invite ? BETA_SERVER + "/v1/messages" : "https://api.anthropic.com/v1/messages";
+  const url = cred.server ? BETA_SERVER + "/v1/messages" : "https://api.anthropic.com/v1/messages";
   const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   const msg = await resp.json();
   if (!resp.ok) {
     const m = msg?.error?.message || `HTTP ${resp.status}`;
-    if (keyTrouble(resp.status, m)) disconnect(cred.invite
-      ? "Your invite code stopped working. Check your invite link, or use your own API key."
+    if (cred.google && resp.status === 401 && /expired/.test(m)) { refreshGoogle(); throw new Error(m); }
+    if (keyTrouble(resp.status, m)) disconnect(cred.google ? m
+      : cred.invite ? "Your invite code stopped working. Check your invite link, or use your own API key."
       : `Your API key stopped working (${m}). It may have expired, been revoked or run out of credit. Enter a new one below.`);
     throw new Error(m);
   }
@@ -3693,9 +3762,9 @@ function recordFeedback(covered, comment = "") {
   $("fbThanks").textContent = covered ? "Thanks. Still glance over every page before sharing." : "Thanks, noted. Don't share this one until you've covered what was missed.";
 }
 async function sendFeedback(entry) {
-  const invite = $("invite").value.trim();
-  if (mode !== "invite" || !BETA_SERVER || !invite) return;
-  fetch(BETA_SERVER + "/feedback", { method: "POST", headers: { "content-type": "application/json", ...inviteHeaders(invite) },
+  const cred = serverCred();
+  if (!cred) return;
+  fetch(BETA_SERVER + "/feedback", { method: "POST", headers: { "content-type": "application/json", ...inviteHeaders(cred) },
     body: JSON.stringify(entry) }).catch(() => {});
 }
 $("fbYes").onclick = () => recordFeedback(true);
@@ -4083,7 +4152,7 @@ let driveToken = null;
 function driveSignIn() {
   return new Promise(async (res, rej) => {
     try {
-      if (!window.google?.accounts?.oauth2) await new Promise((ok, bad) => { const sc = el("script", { src: "https://accounts.google.com/gsi/client" }); sc.onload = ok; sc.onerror = () => bad(new Error("couldn't load Google sign-in")); document.head.append(sc); });
+      await loadGis();
       const client = google.accounts.oauth2.initTokenClient({
         client_id: googleClientId(), scope: "https://www.googleapis.com/auth/drive.file",
         callback: r => r.error ? rej(new Error(r.error_description || r.error)) : res(driveToken = { token: r.access_token, until: Date.now() + (r.expires_in - 60) * 1000 }),
@@ -4391,12 +4460,12 @@ $("motBtn").onclick = async () => {
   const status = $("motStatus");
   const cred = credentials(status);
   const reg = $("motReg").value.toUpperCase().replace(/\s+/g, "");
-  if (!cred?.invite) return;
+  if (!cred?.server) return;
   if (!reg) { setStatus("Enter your registration first.", "error", status); $("motReg").focus(); return; }
   $("motBtn").disabled = true;
   setStatus("Looking up your car…", "busy", status);
   try {
-    const resp = await fetch(`${BETA_SERVER}/vehicle?registration=${encodeURIComponent(reg)}`, { headers: inviteHeaders(cred.invite) });
+    const resp = await fetch(`${BETA_SERVER}/vehicle?registration=${encodeURIComponent(reg)}`, { headers: inviteHeaders(cred) });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d?.error?.message || `HTTP ${resp.status}`);
     const mot = d.mot?.vehicle, dvla = d.dvla?.vehicle;
@@ -4465,6 +4534,7 @@ setNavHeight(); addEventListener("resize", setNavHeight);
 showMode();
 showConnect();
 showBackupNudge();
+showGoogle();
 checkInvite();
 if (mode === "key" && store.get("porter.key") && !connected()) verifyKey(store.get("porter.key"));
 renderHistory();
