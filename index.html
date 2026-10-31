@@ -134,13 +134,6 @@ button.plate { cursor: pointer; padding: 0; font-family: "Arial Narrow", Arial, 
 .diy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .diy-grid label { margin: 0; }
 .diy textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--bg); color: var(--text); }
-.car-tools-box { margin: 10px 0 0; }
-.car-tools-box summary { cursor: pointer; font-weight: 700; font-size: 14px; color: var(--accent); width: max-content; }
-.car-tools-box summary span { font-weight: 500; }
-.plus-badge { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px; background: linear-gradient(135deg, #f6c600, #ff8c00); color: #111; font-size: 10px; font-weight: 800; letter-spacing: .5px; vertical-align: 2px; }
-.car-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0 0; }
-.car-switch { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 700; font-size: 14px; }
-.car-switch select { width: auto; margin: 0; padding: 6px 8px; font-size: 15px; border: 2px solid var(--accent); }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .card-head h2 { margin: 0; }
 .hide-btn { border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 6px 14px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
@@ -495,6 +488,7 @@ h3.panel-head { justify-content: flex-start; }
       <p class="small" id="justAddedText" style="margin:0 0 10px"></p>
       <div id="otherCarAsk"></div>
       <div id="whoAsk"></div>
+      <div id="keyAsk"></div>
       <div id="missingAsk"></div>
       <div id="splitAsk" style="margin:0 0 10px" hidden>
         <p class="small" style="margin:0 0 10px"><b id="splitText"></b> Its details weren't added to this record.</p>
@@ -513,14 +507,6 @@ h3.panel-head { justify-content: flex-start; }
         <span class="plate-hint" id="plateHint">tap to switch</span>
       </div>
     </div>
-    <details class="car-tools-box" id="carTools">
-      <summary>🚗 Vehicles <span class="muted" id="carCount"></span></summary>
-      <div class="car-tools">
-        <button class="hide-btn" id="addCar" type="button">➕ Add a vehicle <span class="plus-badge">PLUS</span></button>
-        <a href="#" class="small" id="removeCar" hidden></a>
-      </div>
-      <p class="small muted" style="margin:6px 0 0">More than one vehicle is a Porter Plus feature, free during the beta.</p>
-    </details>
     <div class="panel-tools" id="panelTools" hidden>
       <button class="fold-btn" id="panelsShut" type="button"><span class="fold-ico up" aria-hidden="true"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></span>Collapse all</button>
       <button class="fold-btn" id="panelsOpen" type="button"><span class="fold-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>Expand all</button>
@@ -634,7 +620,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-1";
+const APP_VERSION = "2026.10.31-3";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1807,7 +1793,7 @@ function showJustAdded(warn) {
   const showMissing = () => $("missingAsk").replaceChildren(...(v?.possibly_missing?.length ? [missingBox(v, showMissing)] : []));
   showMissing();
   $("justAddedText").textContent = $("resultStatus").textContent;
-  showOtherCar(); showWhoAsk();
+  showOtherCar(); showWhoAsk(); showKeyAsk();
   $("scanAnother").textContent = laterDocs.length ? `Next: ${laterDocs[0].label}` : "Add another";
   $("justAddedText").className = "small" + (warn ? " status error" : "");
   $("justAdded").hidden = false;
@@ -2642,6 +2628,59 @@ function whoPicker(v) {
   };
   return el("label", { className: "small", style: "display:flex;gap:6px;align-items:center;margin:0;font-weight:500" }, "Who did it", sel);
 }
+// Key details missing from a car document: say which, since some may have
+// been missed (a blurred photo, a cut-off page), and offer to fill them in,
+// read the same pages again, or retake the photos.
+function missingKeys(v) {
+  if (!v || v.source === "dvsa" || v.service_mode === "diy" || !["service_invoice", "mot_certificate", "receipt"].includes(v.doc_type)) return [];
+  const miss = [];
+  if (!v.date) miss.push(["date", "the date"]);
+  if (v.mileage == null && v.doc_type !== "receipt") miss.push(["mileage", "the mileage"]);
+  if (v.total_cost == null && v.doc_type !== "mot_certificate" && !sumOf(v.line_items)) miss.push(["total_cost", "the total cost"]);
+  if (!v.line_items.length && !v.work_items.length) miss.push(["work", "what work was done"]);
+  return miss;
+}
+function showKeyAsk() {
+  const v = saved.visits.find(x => x.id === lastVisitId), miss = missingKeys(v);
+  if (!miss.length) { $("keyAsk").replaceChildren(); return; }
+  const names = miss.map(([, n]) => n), list = names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names.at(-1) : names[0];
+  const fill = el("div", { className: "diy-grid", hidden: true },
+    ...miss.filter(([k]) => k !== "work").map(([k]) => {
+      const input = el("input", { type: k === "date" ? "date" : "text" });
+      if (k !== "date") input.inputMode = "decimal";
+      input.dataset.k = k;
+      return el("label", {}, { date: "Date", mileage: "Mileage", total_cost: "Total cost (£)" }[k], input);
+    }));
+  const save = el("button", { className: "btn", type: "button", hidden: true }, "Save these");
+  save.onclick = () => {
+    for (const i of fill.querySelectorAll("input")) {
+      const val = i.value.trim(); if (!val) continue;
+      if (i.dataset.k === "date") v.date = val;
+      else { const n = +val.replace(/[^\d.]/g, ""); if (n) v[i.dataset.k] = i.dataset.k === "mileage" ? Math.round(n) : n; }
+    }
+    saveHistory(); renderHistory(); showKeyAsk();
+    setStatus("Saved.", "", $("historyStatus"));
+  };
+  const fillBtn = el("button", { className: "btn secondary", type: "button" }, "✏️ Fill them in");
+  fillBtn.onclick = () => { fill.hidden = save.hidden = false; fillBtn.hidden = true; fill.querySelector("input")?.focus(); };
+  const again = el("button", { className: "btn secondary", type: "button" }, "🔁 Read it again");
+  again.onclick = () => { if (!pages.length || !result) return; dropJob(v); showTab("scan"); $("deviceCheck").hidden = false; $("results").hidden = true; $("sendBtn").click(); };
+  const retake = el("button", { className: "btn secondary", type: "button" }, "📷 Retake photos");
+  retake.onclick = () => { if (!confirm("Remove this job and take the photos again?")) return; dropJob(v); nextDocOrReset(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 }); };
+  $("keyAsk").replaceChildren(el("div", { className: "ask", style: "margin:0 0 10px" },
+    el("p", { className: "small", style: "margin:0 0 8px" }, el("b", {}, "Some key details are missing: "), `${list}. They may not be on the paperwork, or the photo may have been unclear, so some details could have been missed.`),
+    el("div", { className: "row" }, ...(miss.some(([k]) => k !== "work") ? [fillBtn] : []), ...(pages.length && result ? [again] : []), retake),
+    fill, save));
+}
+// Take a just-saved job back out (to read it again or retake it).
+function dropJob(v) {
+  saved.visits = saved.visits.filter(x => x.id !== v.id);
+  saved.notes = saved.notes.filter(n => n.visitId !== v.id);
+  pageStore.del(v.id);
+  if (lastVisitId === v.id) lastVisitId = "";
+  saveHistory(); renderHistory();
+  $("keyAsk").replaceChildren();
+}
 function showWhoAsk() {
   const v = saved.visits.find(x => x.id === lastVisitId);
   if (!v || v.garage_name || v.service_mode === "diy" || v.source === "dvsa") { $("whoAsk").replaceChildren(); return; }
@@ -2663,35 +2702,43 @@ function showOtherCar() {
       `This paperwork shows ${plateText(v.car)}${o.isNew ? " (new to Porter)" : ""}, not ${plateText(o.was)}, so it's saved under ${plateText(v.car)}. If the plate was misread, move it.`),
     el("div", { className: "row" }, keep, move)));
 }
-// The car bar: its number plate, a switcher once there are two cars, and
-// "Add another car".
-function renderCarBar() {
-  const car = currentCar();
-  $("plateWrap").hidden = !car;
-  $("carSelect").hidden = $("plateHint").hidden = saved.cars.length < 2;
-  $("carPlate").setAttribute("aria-hidden", String(saved.cars.length > 1));
-  $("carPlate").replaceChildren(el("span", {}, plateText(car)), el("span", { className: "plate-chev", ariaHidden: "true" }, "▾"));
-  $("carCount").textContent = saved.cars.length > 1 ? `(${saved.cars.length})` : "";
-  $("carSelect").replaceChildren(...saved.cars.map(r => {
+// The number plate is the vehicle menu: tap it to switch vehicle, add one
+// (a Plus feature, free in the beta) or remove an empty one.
+function carOptions(car) {
+  const empty = saved.cars.length > 1 && !saved.visits.some(v => v.car === car);
+  return [...saved.cars.map(r => {
     const n = saved.visits.filter(v => v.car === r).length;
     return el("option", { value: r }, `${plateText(r)} · ${n} job${n === 1 ? "" : "s"}`);
-  }));
+  }), el("option", { disabled: true }, "──────────"),
+  el("option", { value: "+add" }, "➕ Add a vehicle (Plus, free in the beta)"),
+  ...(empty ? [el("option", { value: "+remove" }, `🗑 Remove ${plateText(car)} (no jobs)`)] : [])];
+}
+function onCarChoice(sel) {
+  const v = sel.value;
+  sel.value = currentCar();
+  if (v === "+add") addVehicle();
+  else if (v === "+remove") removeVehicle();
+  else if (v && v !== currentCar()) { switchCar(v); scrollTo({ top: 0 }); }
+}
+function renderCarBar() {
+  const car = currentCar(), hint = saved.cars.length > 1 ? "tap to switch or add" : "tap to add a vehicle";
+  $("plateWrap").hidden = !car;
+  $("plateHint").textContent = hint;
+  $("carPlate").setAttribute("aria-hidden", "true");
+  $("carPlate").replaceChildren(el("span", {}, plateText(car)), el("span", { className: "plate-chev", ariaHidden: "true" }, "▾"));
+  $("carSelect").replaceChildren(...carOptions(car));
   $("carSelect").value = car;
   // The same plate on Add and Mechanic, so it's clear which vehicle new
   // paperwork and notes go to; it switches vehicle the same way.
   for (const wrap of document.querySelectorAll(".plate-copy")) {
     wrap.hidden = !car;
-    const plate = el("button", { className: "plate", type: "button", ariaLabel: "Vehicles", ariaHidden: String(saved.cars.length > 1) },
+    const plate = el("button", { className: "plate", type: "button", ariaHidden: "true", tabIndex: -1 },
       el("span", {}, plateText(car)), el("span", { className: "plate-chev", ariaHidden: "true" }, "▾"));
-    plate.onclick = () => { showTab("history"); $("carTools").open = true; $("carTools").scrollIntoView({ block: "center" }); $("addCar").focus(); };
-    const sel = $("carSelect").cloneNode(true);
-    sel.removeAttribute("id"); sel.value = car; sel.hidden = saved.cars.length < 2;
-    sel.onchange = () => switchCar(sel.value);
-    wrap.replaceChildren(plate, sel, Object.assign(el("span", { className: "plate-hint" }, "tap to switch"), { hidden: saved.cars.length < 2 }));
+    const sel = el("select", { ariaLabel: "Vehicle: switch or add" }, ...carOptions(car));
+    sel.value = car;
+    sel.onchange = () => onCarChoice(sel);
+    wrap.replaceChildren(plate, sel, el("span", { className: "plate-hint" }, hint));
   }
-  const empty = saved.cars.length > 1 && !saved.visits.some(v => v.car === car);
-  $("removeCar").hidden = !empty;
-  $("removeCar").textContent = `Remove ${plateText(car)} (no jobs)`;
 }   // var: renderHistory can run before this line on load
 function renderHistory() {
   const visits = [...carVisits()].sort(byDateDesc);
@@ -3234,27 +3281,23 @@ const openPanel = id => { if ($(id).classList.contains("shut")) $(id).querySelec
     head.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(e); } });
   }
 })();
-// With one vehicle, tapping the plate opens Vehicles at "Add a vehicle"
-// (with more, the menu over the plate takes the tap).
-$("carPlate").onclick = () => { $("carTools").open = true; $("addCar").focus(); };
 function switchCar(r) { store.set("porter.car", r); shutYears.clear(); lastVisitId = ""; renderHistory(); renderDueDates(); }
-$("carSelect").onchange = e => { switchCar(e.target.value); scrollTo({ top: 0 }); };
-$("removeCar").onclick = e => {
-  e.preventDefault();
+$("carSelect").onchange = e => onCarChoice(e.target);
+function removeVehicle() {
   const car = currentCar();
   if (saved.visits.some(v => v.car === car)) return;
   saved.cars = saved.cars.filter(r => r !== car); delete saved.vehicles[car];
   store.set("porter.car", saved.cars[0] || ""); saveHistory(); shutYears.clear(); renderHistory(); renderDueDates();
   setStatus(`Removed ${plateText(car)}.`, "", $("historyStatus"));
 };
-$("addCar").onclick = e => {
-  const r = regKey(prompt("Registration of the other car (e.g. AB12 CDE)?") || "");
+function addVehicle() {
+  const r = regKey(prompt("Registration of the vehicle to add (e.g. AB12 CDE)? Porter Plus, free during the beta.") || "");
   if (!r) return;
   if (!/^[A-Z0-9]{2,8}$/.test(r)) { setStatus("That doesn't look like a registration.", "error", $("historyStatus")); return; }
   addCar(r); saveHistory(); shutYears.clear(); lastVisitId = "";
   renderHistory(); renderDueDates(); scrollTo({ top: 0 });
   setStatus(`Now showing ${plateText(r)}. Add its paperwork, or tap the number plate to switch back.`, "", $("historyStatus"));
-};
+}
 // One tap folds the whole timeline down to its years, or opens every level.
 $("timelineShut").onclick = () => {
   for (const v of carVisits()) { shutVisits.add(v.id); if (v.date) shutYears.add(v.date.slice(0, 4)); for (const g of groupItems(v.line_items).groups) shutTiles.add(`${v.id}:${g.id}`); }
