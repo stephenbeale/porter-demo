@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porter beta guide</title>
+<meta name="description" content="How to try the Porter beta: get started, what to test and how to send feedback.">
+<style>
+:root { --bg: #f6f6f4; --card: #ffffff; --text: #111; --text-2: #55534e; --rule: #e2e1dc; --accent: #1f6feb; --accent-text: #fff; --good: #1a7f37; --warn: #9a6700; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #161615; --card: #20201e; --text: #f0efec; --text-2: #c3c2b7; --rule: #34332f; --accent: #4493f8; --accent-text: #0b0b0b; --good: #4ac26b; --warn: #d4a72c; }
+}
+:root[data-theme="dark"] { --bg: #161615; --card: #20201e; --text: #f0efec; --text-2: #c3c2b7; --rule: #34332f; --accent: #4493f8; --accent-text: #0b0b0b; --good: #4ac26b; --warn: #d4a72c; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { font-size: 1.8em; margin: 0 0 4px; line-height: 1.2; }
+h2 { font-size: 1.2em; margin: 0 0 8px; }
+a { color: var(--accent); }
+.lead { font-size: 1.1em; font-weight: 600; margin: 8px 0 4px; }
+.muted { color: var(--text-2); }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; margin: 14px 0; }
+.btn { display: block; text-align: center; background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 700; padding: 14px 16px; border-radius: 12px; font-size: 1.1em; margin: 14px 0 6px; }
+ol, ul { padding-left: 22px; margin: 6px 0; }
+li { margin: 6px 0; }
+.check { list-style: none; padding-left: 0; }
+.check li::before { content: "☐ "; font-weight: 700; color: var(--accent); }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 22%, transparent); font-weight: 700; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <span class="tag">🧪 Beta</span>
+  <h1>Welcome to the Porter beta</h1>
+  <p class="lead">Porter organises your car's service paperwork in one place: invoices, MOTs, receipts and what the mechanic told you.</p>
+  <p class="muted">Snap or upload the paperwork and Porter reads it, builds a timeline of every job and what it cost, reminds you when the MOT is due, and makes a tidy service history book when you sell. Your phone redacts your personal details before anything is sent.</p>
+  <a class="btn" href="./">Open Porter</a>
+  <p class="muted" style="text-align:center;margin:0">Tip: add it to your home screen from the browser menu so it's one tap away.</p>
+
+  <section class="card">
+    <h2>1. Get started (about 5 minutes)</h2>
+    <ol>
+      <li><strong>Get an Anthropic API key.</strong> This is how Porter reads your paperwork during the beta. Sign up at the <a href="https://console.anthropic.com/">Anthropic Console</a>, add £5 of credit under <a href="https://console.anthropic.com/settings/billing">Billing</a> (a document costs about 4–7p, so that's 70 or more), then <a href="https://console.anthropic.com/settings/keys">create a key</a> called "Porter" and copy it.</li>
+      <li><strong>Paste it into Porter</strong> under Settings. It confirms straight away and tucks the box away.</li>
+      <li><strong>Add your first document</strong>: tap a big button on the home screen and photograph an invoice or MOT certificate, or choose images or a PDF.</li>
+    </ol>
+    <p class="muted">Your key stays on your phone and only ever goes to Anthropic. If you were given an invite code instead, just open the invite link: no key needed.</p>
+  </section>
+
+  <section class="card">
+    <h2>2. What to try</h2>
+    <ul class="check">
+      <li>Add a garage invoice with two or more pages</li>
+      <li>Add an MOT certificate</li>
+      <li>Add a card receipt, or a screenshot of a part you bought online</li>
+      <li>Check the redaction: is anything personal still showing?</li>
+      <li>Log some DIY work, or note what a mechanic told you (Mechanic tab)</li>
+      <li>Look through History: the timeline, Most recent work, Year by year</li>
+      <li>Add a date to your phone calendar from the Calendar tab</li>
+      <li>Make the service history book (History → Back up &amp; export)</li>
+      <li>Split a job, move a page, or change what a job is (✏️ Edit this job)</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>3. Tell us what you think</h2>
+    <p>Tap <strong>💬 Feedback</strong> at the top of Porter whenever something is confusing, wrong or great. Your message goes to whoever invited you, via WhatsApp, email or whatever you choose. A screenshot helps too.</p>
+    <p class="muted">Please don't put personal details (names, addresses, card numbers) in feedback.</p>
+  </section>
+
+  <section class="card">
+    <h2>Good to know</h2>
+    <ul>
+      <li><strong>Your data stays on your phone.</strong> History and kept pages live in this browser only. Use <em>Back up</em> in History now and then, or save everything to Google Drive.</li>
+      <li><strong>Privacy:</strong> your phone blacks out names, addresses, phone numbers and card details before a page is sent. AI double-checks and covers anything missed in what you keep.</li>
+      <li><strong>It's a beta.</strong> Things may change or break; newer versions appear automatically (Porter tells you when one is out).</li>
+      <li>Works best on a recent phone in Chrome, Brave, Safari or Edge.</li>
+    </ul>
+  </section>
+
+  <a class="btn" href="./">Open Porter</a>
+</main>
+</body>
+</html>
