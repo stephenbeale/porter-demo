@@ -249,6 +249,9 @@ h3.panel-head { justify-content: flex-start; }
 .visit-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; padding: 0;
   border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .visit-title { display: block; color: var(--text-2); font-size: .9em; }
+.batch-bar { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.progress { height: 8px; border-radius: 99px; background: var(--rule); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--accent); }
 .visit-cost { display: block; font-weight: 600; font-size: .95em; margin-top: 2px; }
 .item-row { cursor: pointer; }
 #toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px;
@@ -332,6 +335,11 @@ h3.panel-head { justify-content: flex-start; }
   </div>
 
   <div class="ask small" id="updateNote" hidden>A newer version of Porter is out. <a href="#" id="updateLink"><b>Load it now</b></a></div>
+  <div class="ask batch-bar" id="batchBar" hidden>
+    <p style="margin:0 0 8px">📚 <b id="batchText"></b></p>
+    <div class="progress"><span id="batchProgress"></span></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="batchNext" type="button"></button></div>
+  </div>
   <nav class="navtabs" id="mainTabs" aria-label="Sections">
     <button class="navtab" type="button" data-tab="history" aria-current="page"><span class="ico" aria-hidden="true">✍️</span>History</button>
     <button class="navtab" type="button" data-tab="scan"><span class="ico" aria-hidden="true">➕</span>Add</button>
@@ -485,7 +493,10 @@ h3.panel-head { justify-content: flex-start; }
       <li>Tap a box to uncover it if it isn't personal. The garage's own details are never covered.</li>
       <li>Missed something, like a signature? Tap <b>Draw a box</b>, then drag across it.</li>
     </ul>
-    <div class="row" style="margin-bottom:10px"><button class="btn secondary" id="drawBtn" type="button" aria-pressed="false">✏️ Draw a box</button></div>
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn secondary" id="drawBtn" type="button" aria-pressed="false">✏️ Draw a box</button>
+      <button class="btn secondary" id="clearBoxes" type="button">🚫 Nothing to redact: remove all boxes</button>
+    </div>
     <div id="checkCanvases"></div>
     <p class="muted small" id="checkSummary"></p>
     <div class="row">
@@ -526,6 +537,7 @@ h3.panel-head { justify-content: flex-start; }
       <details id="redactionBox"><summary>Redacted pages</summary>
       <p class="small" style="margin:10px 0">Slide to compare the boxes with <b>what a buyer would see</b>. Is a box covering something that isn't personal (like a word of small print)? <b>Tap it to uncover it</b>; tap again to cover it. This only changes the copy you keep or download.</p>
       <div id="canvases"></div>
+      <div class="row" id="uncoverAllRow" style="margin:8px 0"><button class="btn secondary" id="uncoverAll" type="button">🚫 Nothing to redact: remove all boxes</button></div>
       <details class="small"><summary>What do the box colours mean?</summary>
         <p class="muted small"><b>Red:</b> redacted on your phone before sending. <b>Purple:</b> personal details your phone missed, so they were sent, and AI found them; they're covered now. <b>Orange:</b> numbers matching your details from another scan, such as the end of a phone number showing under a receipt.</p>
       </details>
@@ -745,7 +757,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-39";
+const APP_VERSION = "2026.10.31-40";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1500,6 +1512,7 @@ function stopRun() {
   stayAwake(false);
 }
 function resetPages() {
+  awaitingNext = false; $("batchBar").hidden = true;
   failedFiles = []; $("retryRow").hidden = true;
   diy = null;
   stopRun();
@@ -2260,6 +2273,24 @@ $("cancelBtn").onclick = () => {
   if (!confirm(laterDocs.length ? `Cancel this document and remove ${these}? Your other documents stay.` : `Cancel and remove ${these}? Nothing will be saved.`)) return;
   nextDocOrReset("Cancelled. Nothing was saved."); scrollTo({ top: 0 });
 };
+// Batches: after each visit is saved, a bar says how many are left and one
+// tap reads the next (it goes straight to the redaction check).
+let awaitingNext = false;
+function showBatchBar() {
+  const on = awaitingNext && laterDocs.length > 0;
+  $("batchBar").hidden = !on;
+  if (!on) return;
+  const done = docOf.n, total = docOf.total, left = laterDocs.length;
+  $("batchText").textContent = `Visit ${done} of ${total} saved. ${left} more visit${left === 1 ? "" : "s"} from your batch to read.`;
+  $("batchProgress").style.width = `${Math.round(done / total * 100)}%`;
+  $("batchNext").textContent = `▶ Read next: ${laterDocs[0].label} (${done + 1} of ${total})`;
+}
+function readNextVisit() {
+  awaitingNext = false; showBatchBar();
+  nextDocOrReset(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 });
+  if (pages.length) $("scanBtn").click();
+}
+$("batchNext").onclick = readNextVisit;
 function nextDocOrReset(said = "") {
   const rest = laterDocs, n = docOf.n, total = docOf.total;
   resetPages();
@@ -2268,9 +2299,9 @@ function nextDocOrReset(said = "") {
   laterDocs = rest; docOf = { n: n + 1, total, label: d.label };
   pages = d.pages;
   renderPages();
-  setStatus(`${said ? said + " " : ""}Next: ${d.label} (document ${n + 1} of ${total}, ${d.pages.length} page${d.pages.length > 1 ? "s" : ""}). Tap Process to check and send it.`);
+  setStatus(`${said ? said + " " : ""}Next: ${d.label} (visit ${n + 1} of ${total}, ${d.pages.length} page${d.pages.length > 1 ? "s" : ""}). Tap Process to check and send it.`);
 }
-$("doneBtn").onclick = () => { nextDocOrReset(); $("justAdded").hidden = true; scrollTo({ top: 0 }); };
+$("doneBtn").onclick = () => { if (laterDocs.length) return readNextVisit(); nextDocOrReset(); $("justAdded").hidden = true; scrollTo({ top: 0 }); };
 // After a scan is saved, History is where you land: the new visit opens at
 // the top, under a short note of what happened and what to do next.
 function showJustAdded(warn) {
@@ -2279,14 +2310,16 @@ function showJustAdded(warn) {
   showMissing();
   $("justAddedText").textContent = $("resultStatus").textContent;
   showOtherCar(); showWhoAsk(); showKeyAsk();
-  $("scanAnother").textContent = laterDocs.length ? `Next: ${laterDocs[0].label}` : "Add another";
+  $("scanAnother").textContent = laterDocs.length ? `▶ Read next visit (${docOf.n + 1} of ${docOf.total})` : "Add another";
+  $("scanAnother").className = laterDocs.length ? "btn" : "btn secondary";
+  awaitingNext = laterDocs.length > 0; showBatchBar();
   $("justAddedText").className = "small" + (warn ? " status warn" : "");
   $("justAdded").hidden = false;
   showTab("history");
   scrollTo({ top: 0 });
 }
 $("seeRedaction").onclick = () => { showTab("scan"); $("redactionBox").open = true; $("redactionBox").scrollIntoView({ block: "start" }); };
-$("scanAnother").onclick = () => { nextDocOrReset(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 }); };
+$("scanAnother").onclick = () => { if (laterDocs.length) return readNextVisit(); nextDocOrReset(); $("justAdded").hidden = true; showTab("scan"); scrollTo({ top: 0 }); };
 
 function paintCheck(c, p, draft) {
   const ctx = c.getContext("2d");
@@ -2488,7 +2521,7 @@ $("sendBtn").onclick = async () => {
     else storeVisit(result);
     if (diy && !askFirst) { diy = null; resetDiy(); }
     $("resultTitle").textContent = askFirst ? "Read, not saved yet" : merged ? `Added to your ${merged} visit` : "Saved to your history";
-    $("doneBtn").textContent = laterDocs.length ? `Done: next is ${laterDocs[0].label}` : "Done: add another document";
+    $("doneBtn").textContent = laterDocs.length ? `▶ Read next visit: ${laterDocs[0].label} (${docOf.n + 1} of ${docOf.total})` : "Done: add another document";
     showSplit();
     setStatus(aiFound
       ? `Saved. AI spotted ${aiFound} personal detail${aiFound === 1 ? "" : "s"} your phone missed and covered ${aiFound === 1 ? "it" : "them"}, so anything you keep or share is redacted. ${aiFound === 1 ? "It was" : "They were"} in what AI read, though (purple boxes under "Redacted pages"; check if you like). Cost about $${usd.toFixed(2)}.`
@@ -2579,6 +2612,7 @@ function comparePage(i) {
 // of a part with nothing to cover just gets a line.
 function renderCanvases() {
   const none = [];
+  $("uncoverAllRow").hidden = !result.pii.some(p => !p.off);
   $("canvases").replaceChildren(...pages.map((p, i) => {
     if (boxesFor(i, p).length) return comparePage(i);
     none.push(i + 1); return null;
@@ -2586,6 +2620,19 @@ function renderCanvases() {
   ...(none.length ? [el("p", { className: "small muted" }, `${none.length === pages.length ? (pages.length > 1 ? "These uploads have" : "This upload has") : `Upload${none.length > 1 ? "s" : ""} ${none.join(", ")} ${none.length > 1 ? "have" : "has"}`} nothing personal on ${none.length > 1 ? "them" : "it"}, so there's nothing to redact.`)] : []));
 }
 
+$("uncoverAll").onclick = () => {
+  if (!confirm("Remove every box from the copy you keep? Only do this if none of them cover anything personal.")) return;
+  result.pii.forEach(p => { p.off = true; });
+  renderCanvases();
+  if (lastVisitId) { $("keepBtn").disabled = false; $("keepBtn").textContent = "Update the kept copy"; }
+  toast("Boxes removed. Tap Update the kept copy to save it.");
+};
+$("clearBoxes").onclick = () => {
+  if (!confirm("Remove every box? These pages will then be sent with nothing covered. Only do this if none of the boxes cover anything personal.")) return;
+  pages.forEach(p => (p.local || []).forEach(b => { b.on = false; }));
+  showDeviceCheck();
+  toast("All boxes removed. Tap a spot to cover it again, or Draw a box.");
+};
 $("downloadBtn").onclick = () => {
   pages.forEach((_, i) => {
     const a = document.createElement("a");
