@@ -126,7 +126,8 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 #checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
 .ask { border: 2px solid var(--warn); border-radius: 12px; padding: 12px; margin: 0 0 12px; }
 .appfoot { max-width: 720px; margin: 8px auto 32px; padding: 0 16px; text-align: center; }
-.tagline { font-size: 1.05em; font-weight: 600; margin: 6px 0 4px; }
+.tagline { font-size: 1.05em; font-weight: 600; margin: 8px 0 6px; padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 10px; line-height: 1.45; }
 .hero { margin: 14px 0; padding: 18px 16px; border-radius: 16px; border: 2px solid var(--accent); background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 18%, var(--card)), var(--card)); text-align: center; }
 .hero-icon { font-size: 40px; line-height: 1; }
 .hero h3 { margin: 8px 0 10px; font-size: 1.3em; line-height: 1.25; }
@@ -303,7 +304,7 @@ h3.panel-head { justify-content: flex-start; }
     <span>Porter <span class="muted small">demo</span></span>
     <a href="#" id="settingsLink" class="small" style="font-weight:500" hidden>⚙ Key &amp; model</a>
   </h1>
-  <p class="tagline">All your car's service paperwork, organised in one easy place. Goodbye to the pile in the glove box!</p>
+  <p class="tagline">🚗🧾 All your car's service paperwork, organised in one easy place&nbsp;🗂️ Goodbye to the pile in the glove box!&nbsp;👋</p>
   <p class="muted small">🔒 Your phone redacts your personal details before anything is sent; AI only reads what's left.</p>
 
   <div class="ask small" id="updateNote" hidden>A newer version of Porter is out. <a href="#" id="updateLink"><b>Load it now</b></a></div>
@@ -622,7 +623,7 @@ h3.panel-head { justify-content: flex-start; }
         <button class="btn secondary" id="backupBtn" type="button">⬇ Back up</button>
         <button class="btn secondary" id="restoreBtn" type="button">⬆ Restore</button>
         <button class="btn secondary" id="driveBtn" type="button">☁️ Save to Google Drive</button>
-        <button class="btn" id="bookBtn" type="button">📕 Service history book (PDF)</button>
+        <button class="btn" id="bookBtn" type="button">📕 Export service history as book (PDF)</button>
         <button class="btn secondary" id="exportBtn" type="button">⬇ Download everything (zip)</button>
       </div>
       <details class="small" id="driveSetup"><summary>Set up Save to Google Drive (once)</summary>
