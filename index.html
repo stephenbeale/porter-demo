@@ -126,7 +126,8 @@ label.check input { width: 20px; height: 20px; margin: 0; }
 #checkCanvases.drawing canvas { touch-action: none; cursor: crosshair; }
 .ask { border: 2px solid var(--warn); border-radius: 12px; padding: 12px; margin: 0 0 12px; }
 .appfoot { max-width: 720px; margin: 8px auto 32px; padding: 0 16px; text-align: center; }
-.tagline { font-size: 1.05em; font-weight: 600; margin: 6px 0 4px; }
+.tagline { font-size: 1.05em; font-weight: 600; margin: 8px 0 6px; padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 10px; line-height: 1.45; }
 .hero { margin: 14px 0; padding: 18px 16px; border-radius: 16px; border: 2px solid var(--accent); background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 18%, var(--card)), var(--card)); text-align: center; }
 .hero-icon { font-size: 40px; line-height: 1; }
 .hero h3 { margin: 8px 0 10px; font-size: 1.3em; line-height: 1.25; }
@@ -316,7 +317,7 @@ h3.panel-head { justify-content: flex-start; }
     <span>Porter <span class="muted small">demo</span></span>
     <a href="#" id="settingsLink" class="small" style="font-weight:500" hidden>⚙ Key &amp; model</a>
   </h1>
-  <p class="tagline">All your car's service paperwork, organised in one easy place. Goodbye to the pile in the glove box!</p>
+  <p class="tagline">🚗🧾 All your car's service paperwork, organised in one easy place&nbsp;🗂️ Goodbye to the pile in the glove box!&nbsp;👋</p>
   <p class="muted small">🔒 Your phone redacts your personal details before anything is sent; AI only reads what's left.</p>
   <div class="beta-bar">
     <span class="beta-tag">🧪 Beta</span>
@@ -651,7 +652,7 @@ h3.panel-head { justify-content: flex-start; }
         <button class="btn secondary" id="backupBtn" type="button">⬇ Back up</button>
         <button class="btn secondary" id="restoreBtn" type="button">⬆ Restore</button>
         <button class="btn secondary" id="driveBtn" type="button">☁️ Save to Google Drive</button>
-        <button class="btn" id="bookBtn" type="button">📕 Service history book (PDF)</button>
+        <button class="btn" id="bookBtn" type="button">📕 Export service history as book (PDF)</button>
         <button class="btn secondary" id="exportBtn" type="button">⬇ Download everything (zip)</button>
       </div>
       <details class="small" id="driveSetup"><summary>Set up Save to Google Drive (once)</summary>
@@ -667,7 +668,7 @@ h3.panel-head { justify-content: flex-start; }
         <input id="googleClientId" type="text" autocomplete="off" spellcheck="false" placeholder="123…apps.googleusercontent.com">
         <p class="muted">Porter can only see files it creates in your Drive, nothing else.</p>
       </details>
-      <p class="muted small">Both include the service history book, a summary PDF laid out like this page, and a folder for each visit with its redacted pages. Google Drive gets them as real folders, in a "Porter" folder; the zip can go to Dropbox or OneDrive from your Downloads.</p>
+      <p class="muted small">Both include your service history as a book (PDF), a summary PDF laid out like this page, and a folder for each visit with its redacted pages. Google Drive gets them as real folders, in a "Porter" folder; the zip can go to Dropbox or OneDrive from your Downloads.</p>
       <input id="restoreFile" type="file" accept="application/json,.json">
       <p class="muted small">A backup is one file with your history and kept documents (personal details already redacted). Use it to move to a new phone or into the Home Screen app.</p>
     </section>
@@ -4137,7 +4138,7 @@ $("driveBtn").onclick = async () => {
       await driveUpload(file, f.data, f.type, parent);
     }
     const link = el("a", { href: `https://drive.google.com/drive/folders/${top}`, target: "_blank", rel: "noopener" }, "Open it in Drive");
-    $("historyStatus").className = "status"; $("historyStatus").replaceChildren(`Saved to Google Drive, in Porter › ${name}: the service history book and summary PDFs, and ${set.folders} visit folder${set.folders === 1 ? "" : "s"} with ${set.pages} page${set.pages === 1 ? "" : "s"}. `, link);
+    $("historyStatus").className = "status"; $("historyStatus").replaceChildren(`Saved to Google Drive, in Porter › ${name}: your service history as a book (PDF), the summary PDF, and ${set.folders} visit folder${set.folders === 1 ? "" : "s"} with ${set.pages} page${set.pages === 1 ? "" : "s"}. `, link);
   } catch (err) {
     setStatus(`Couldn't save to Google Drive: ${err.message}.`, "error", $("historyStatus"));
   } finally { $("driveBtn").disabled = false; }
@@ -4281,7 +4282,7 @@ $("bookBtn").onclick = async () => {
       catch (err) { if (err.name === "AbortError") { setStatus("", "", $("historyStatus")); return; } }
     }
     if (!shared) { const url = URL.createObjectURL(file); el("a", { href: url, download: file.name }).click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-    setStatus(`Made the service history book: ${n} pages, ${jobs} job${jobs === 1 ? "" : "s"}.`, "", $("historyStatus"));
+    setStatus(`Exported your service history as a book (PDF): ${n} pages, ${jobs} job${jobs === 1 ? "" : "s"}.`, "", $("historyStatus"));
   } catch (err) { setStatus(`Couldn't make the book (${err.message}).`, "error", $("historyStatus")); }
   finally { $("bookBtn").disabled = false; }
 };
@@ -4301,7 +4302,7 @@ $("exportBtn").onclick = async () => {
     }
     if (!shared) { const url = URL.createObjectURL(file); el("a", { href: url, download: file.name }).click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
     const missing = carVisits().filter(v => !v.keptPages && v.source !== "dvsa").length;
-    setStatus(`${shared ? "Shared" : "Downloaded"} "${file.name}": the service history book and summary PDFs, and ${folders} visit folder${folders === 1 ? "" : "s"} with ${n} page${n === 1 ? "" : "s"}, for ${visits} visit${visits === 1 ? "" : "s"}.` +
+    setStatus(`${shared ? "Shared" : "Downloaded"} "${file.name}": your service history as a book (PDF), the summary PDF, and ${folders} visit folder${folders === 1 ? "" : "s"} with ${n} page${n === 1 ? "" : "s"}, for ${visits} visit${visits === 1 ? "" : "s"}.` +
       (shared ? "" : " To put it in Drive, Dropbox or OneDrive, open your Downloads (or the download notice) and share it to that app.") +
       (missing ? ` ${missing} older visit${missing === 1 ? " has" : "s have"} no kept pages, so ${missing === 1 ? "it's" : "they're"} in the PDF only.` : ""), "", $("historyStatus"));
   } catch (err) {
