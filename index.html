@@ -622,6 +622,7 @@ h3.panel-head { justify-content: flex-start; }
         <button class="btn secondary" id="backupBtn" type="button">⬇ Back up</button>
         <button class="btn secondary" id="restoreBtn" type="button">⬆ Restore</button>
         <button class="btn secondary" id="driveBtn" type="button">☁️ Save to Google Drive</button>
+        <button class="btn" id="bookBtn" type="button">📕 Service history book (PDF)</button>
         <button class="btn secondary" id="exportBtn" type="button">⬇ Download everything (zip)</button>
       </div>
       <details class="small" id="driveSetup"><summary>Set up Save to Google Drive (once)</summary>
@@ -691,7 +692,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-24";
+const APP_VERSION = "2026.10.31-25";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -3806,21 +3807,25 @@ function wrapText(t, max = 92) {
   }
   return out;
 }
-// pagesIn: [{ lines: [[text, size, bold]] } | { jpeg: Uint8Array, w, h, caption }]
+// pagesIn: [{ ops } | { lines } | { jpeg, w, h, caption }], each optionally
+// with extra (drawn on top, e.g. header and footer), links ([{ rect, to }],
+// to = a page index) and bookmark (a title for the reader's outline).
 function buildPdf(pagesIn) {
   const W = 595, H = 842, M = 40, enc = s => Uint8Array.from(s, ch => ch.charCodeAt(0) & 255);
   const chunks = [], offsets = [];
   let length = 0;
   const push = b => { const u = typeof b === "string" ? enc(b) : b; chunks.push(u); length += u.length; };
   const objs = [];   // [id, header, streamBytes?]
-  const fontR = 3, fontB = 4, pageIds = [];
+  const fontR = 3, fontB = 4;
   let next = 5;
-  for (const pg of pagesIn) {
-    const pageId = next++, contentId = next++, imgId = pg.jpeg ? next++ : 0;
-    pageIds.push(pageId);
+  // Number every object first, so pages can point at each other (links, outline).
+  const plan = pagesIn.map(pg => ({ pageId: next++, contentId: next++, imgId: pg.jpeg ? next++ : 0, annots: (pg.links || []).map(() => next++) }));
+  const pageIds = plan.map(p => p.pageId);
+  pagesIn.forEach((pg, n) => {
+    const { pageId, contentId, imgId, annots } = plan[n];
     let ops = "";
     if (pg.jpeg) {
-      const top = H - M - 18, k = Math.min((W - 2 * M) / pg.w, (top - M) / pg.h), w = pg.w * k, h = pg.h * k;
+      const top = H - M - 18, k = Math.min((W - 2 * M) / pg.w, (top - M - 14) / pg.h), w = pg.w * k, h = pg.h * k;
       ops += `BT /F2 10 Tf ${M} ${H - M - 4} Td (${pdfText(pg.caption)}) Tj ET\n`;
       ops += `q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${((W - w) / 2).toFixed(2)} ${(top - h).toFixed(2)} cm /Im Do Q\n`;
     } else if (pg.ops) ops = pg.ops;
@@ -3828,12 +3833,23 @@ function buildPdf(pagesIn) {
       let y = H - M;
       for (const [text, size = 10, bold] of pg.lines) { y -= size * 1.45; if (text) ops += `BT /${bold ? "F2" : "F1"} ${size} Tf ${M} ${y.toFixed(1)} Td (${pdfText(text)}) Tj ET\n`; }
     }
+    if (pg.extra) ops += pg.extra;
     const content = enc(ops);
-    objs.push([pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${fontR} 0 R /F2 ${fontB} 0 R >>${imgId ? ` /XObject << /Im ${imgId} 0 R >>` : ""} >> /Contents ${contentId} 0 R >>`]);
+    objs.push([pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${fontR} 0 R /F2 ${fontB} 0 R >>${imgId ? ` /XObject << /Im ${imgId} 0 R >>` : ""} >> /Contents ${contentId} 0 R${annots.length ? ` /Annots [${annots.map(a => a + " 0 R").join(" ")}]` : ""} >>`]);
     objs.push([contentId, `<< /Length ${content.length} >>`, content]);
     if (imgId) objs.push([imgId, `<< /Type /XObject /Subtype /Image /Width ${pg.w} /Height ${pg.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${pg.jpeg.length} >>`, pg.jpeg]);
+    (pg.links || []).forEach((l, i) => objs.push([annots[i], `<< /Type /Annot /Subtype /Link /Rect [${l.rect.map(v => v.toFixed(1)).join(" ")}] /Border [0 0 0] /Dest [${pageIds[l.to]} 0 R /XYZ 0 ${H} 0] >>`]));
+  });
+  // The reader's outline (bookmarks): one entry per marked page.
+  const marks = pagesIn.map((pg, n) => pg.bookmark ? { title: pg.bookmark, n } : null).filter(Boolean);
+  let outline = "";
+  if (marks.length) {
+    const outId = next++, ids = marks.map(() => next++);
+    marks.forEach((m, i) => objs.push([ids[i], `<< /Title (${pdfText(m.title)}) /Parent ${outId} 0 R${i ? ` /Prev ${ids[i - 1]} 0 R` : ""}${i < ids.length - 1 ? ` /Next ${ids[i + 1]} 0 R` : ""} /Dest [${pageIds[m.n]} 0 R /XYZ 0 ${H} 0] >>`]));
+    objs.push([outId, `<< /Type /Outlines /First ${ids[0]} 0 R /Last ${ids.at(-1)} 0 R /Count ${ids.length} >>`]);
+    outline = ` /Outlines ${outId} 0 R /PageMode /UseOutlines`;
   }
-  objs.unshift([1, "<< /Type /Catalog /Pages 2 0 R >>"], [2, `<< /Type /Pages /Kids [${pageIds.map(i => i + " 0 R").join(" ")}] /Count ${pageIds.length} >>`],
+  objs.unshift([1, `<< /Type /Catalog /Pages 2 0 R${outline} >>`], [2, `<< /Type /Pages /Kids [${pageIds.map(i => i + " 0 R").join(" ")}] /Count ${pageIds.length} >>`],
     [fontR, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"],
     [fontB, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"]);
   push("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n");
@@ -3870,6 +3886,7 @@ function layoutRows(rows) {
     const x = M + (r.indent || 0) * 12, col = r.gray ? "0.4 g " : "";
     if (r.t) ops += `BT ${col}/${r.bold ? "F2" : "F1"} ${size} Tf ${x} ${y.toFixed(1)} Td (${pdfText(r.t)}) Tj ET\n`;
     if (r.right) ops += `BT ${col}/${r.bold ? "F2" : "F1"} ${size} Tf ${(W - M - widthOf(r.right, size)).toFixed(1)} ${y.toFixed(1)} Td (${pdfText(r.right)}) Tj ET\n`;
+    if (r.bar != null) ops += `0.27 0.58 0.97 rg ${(W - M - 260).toFixed(1)} ${(y - 1).toFixed(1)} ${(Math.max(0.01, r.bar) * 170).toFixed(1)} ${(size * 0.9).toFixed(1)} re f 0 g\n`;
     if (r.plate) {   // a UK number plate, as in the app: yellow, blue "UK" strip
       const ts = 15, strip = 15, h = 24, w = strip + widthOf(r.plate, ts) * 1.08 + 16, x0 = W - M - w, y0 = y - 6;
       ops += `0.965 0.776 0 rg ${x0.toFixed(1)} ${y0.toFixed(1)} ${w.toFixed(1)} ${h} re f\n`;
@@ -4054,6 +4071,130 @@ function makeZip(entries) {   // [{ name, data: Uint8Array }]
   const size = central.reduce((t, c) => t + c.length, 0);
   return new Blob([...parts, ...central, new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(entries.length), ...u16(entries.length), ...u32(size), ...u32(offset), ...u16(0)])], { type: "application/zip" });
 }
+// The service history book: one PDF with a cover, a contents page that links
+// to each part, a summary (totals, spend by year, every job in order), then a
+// chapter per job with its details and its scanned (redacted) pages. Every
+// page after the cover has a header and a page number.
+const pdfWidth = (t, size) => [...String(t)].reduce((w, ch) => w + (/[0-9£.,]/.test(ch) ? 0.556 : /[A-Z]/.test(ch) ? 0.68 : /[il.|']/.test(ch) ? 0.25 : 0.52), 0) * size;
+function plateOps(right, base, text, ts = 15) {
+  const strip = 15, h = ts + 9, w = strip + pdfWidth(text, ts) * 1.08 + 16, x0 = right - w, y0 = base - 6;
+  return `0.965 0.776 0 rg ${x0.toFixed(1)} ${y0.toFixed(1)} ${w.toFixed(1)} ${h} re f\n` +
+    `0.12 0.29 0.66 rg ${x0.toFixed(1)} ${y0.toFixed(1)} ${strip} ${h} re f\n` +
+    `0 0 0 RG 1.4 w ${x0.toFixed(1)} ${y0.toFixed(1)} ${w.toFixed(1)} ${h} re S\n` +
+    `1 1 1 rg BT /F2 6.5 Tf ${(x0 + 3).toFixed(1)} ${(y0 + 3.5).toFixed(1)} Td (UK) Tj ET\n` +
+    `0 0 0 rg BT /F2 ${ts} Tf ${(x0 + strip + 8).toFixed(1)} ${(y0 + 7).toFixed(1)} Td (${pdfText(text)}) Tj ET\n0 g\n`;
+}
+const text = (x, y, s, size = 10, bold = false, gray = false) => `BT ${gray ? "0.4 g " : "0 g "}/${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${y.toFixed(1)} Td (${pdfText(s)}) Tj ET\n`;
+async function buildBook() {
+  const W = 595, H = 842, M = 42;
+  const visits = [...carVisits()].sort((a, b) => (a.date || "").localeCompare(b.date || ""));   // oldest first, like a logbook
+  const reg = currentCar(), plate = plateText(reg), car = carLabel(reg).replace(/\s*\(.*\)$/, "") || "Your car";
+  const total = visits.reduce((t, v) => t + (jobCost(v) ?? 0), 0);
+  const miles = Math.max(0, ...visits.map(v => v.mileage || 0));
+  // Summary: totals, spend by year (with bars), then every job in a line or two.
+  const years = {};
+  for (const v of visits) { const y = (v.date || "").slice(0, 4) || "Undated"; (years[y] ||= { jobs: 0, spend: 0 }); years[y].jobs++; years[y].spend += jobCost(v) ?? 0; }
+  const most = Math.max(1, ...Object.values(years).map(y => y.spend));
+  const summary = [{ t: "Summary", size: 20, bold: true }, { rule: true },
+    { t: [`${visits.length} job${visits.length === 1 ? "" : "s"} on record`, total ? `${money(total)} spent` : "", miles ? `${miles.toLocaleString()} miles latest` : ""].filter(Boolean).join(" · "), size: 11 },
+    ...($("yearScore").textContent ? [{ t: $("yearScore").textContent.replace(/: tap (it|one) to add paperwork\./, "."), size: 10, gray: true }] : []),
+    { t: "Spend by year", size: 13, bold: true, gap: 10, keep: 60 },
+    ...Object.entries(years).sort().reverse().map(([y, d]) => ({ t: `${y}   ${d.jobs} job${d.jobs === 1 ? "" : "s"}`, right: money(d.spend) || "£0.00", bar: d.spend / most })),
+    { t: "Timeline of work", size: 13, bold: true, gap: 10, keep: 60 }];
+  for (const v of [...visits].reverse()) {
+    summary.push({ rule: true }, { t: `${niceDate(v.date)} · ${visitWhere(v) || "Job"}`, right: money(jobCost(v)) || "", bold: true, size: 10, keep: 40 });
+    for (const l of wrapText([visitSummaryTitle(v), workLine(v)].filter(Boolean).join(": "), 92)) summary.push({ t: l, size: 9, gray: true, indent: 1 });
+  }
+  const summaryPages = layoutRows(summary);
+  // A chapter per job: its details, then its pages.
+  const chapters = [];
+  for (const [n, v] of visits.entries()) {
+    const rows = [{ t: `Job ${n + 1}: ${niceDate(v.date)}`, size: 18, bold: true },
+      { t: [visitWhere(v), v.mileage != null ? `${v.mileage.toLocaleString()} miles` : "", visitSummaryTitle(v)].filter(Boolean).join(" · "), size: 11, gray: true }, { rule: true }];
+    const own = sumOf(v.line_items.filter(i => i.own)), cost = jobCost(v);
+    if (cost != null) rows.push({ t: own ? `Paid ${money(cost)}: ${cost - own ? money(cost - own) + " to " + (visitWhere(v) || "the garage") + " + " : ""}${money(own)} for parts bought` : `Paid ${money(cost)}`, size: 11, bold: true });
+    const { groups, labour } = groupItems(v.line_items);
+    for (const g of groups) {
+      rows.push({ t: g.label, bold: true, size: 10, gap: 4 });
+      for (const it of g.items) for (const [i, l] of wrapText(it.description + (it.own ? " (bought by owner)" : ""), 80).entries()) rows.push({ t: l, right: i ? "" : money(it.line_total) || "", size: 10, indent: 1 });
+    }
+    if (labour.length) {
+      rows.push({ t: "Labour", bold: true, size: 10, gap: 4 });
+      for (const it of labour) for (const [i, l] of wrapText(it.description, 80).entries()) rows.push({ t: l, right: i ? "" : money(it.line_total) || "", size: 10, indent: 1 });
+    }
+    if (!v.line_items.length && v.work_items.length) for (const l of wrapText(v.work_items.join("; "), 85)) rows.push({ t: l, size: 10 });
+    for (const a of v.advisories) for (const l of wrapText("Advisory: " + a, 85)) rows.push({ t: l, size: 10 });
+    for (const note of carNotes().filter(x => x.visitId === v.id)) for (const l of wrapText("Mechanic said: " + note.parsed.summary, 85)) rows.push({ t: l, size: 10 });
+    const kept = v.keptPages ? await pageStore.get(v.id) || [] : [];
+    rows.push({ t: kept.length ? `${kept.length} scanned page${kept.length === 1 ? "" : "s"} follow${kept.length === 1 ? "s" : ""}, personal details redacted.` : "No scanned pages kept for this job.", size: 9, gray: true, gap: 8 });
+    const pages = layoutRows(rows);
+    for (const [i, p] of kept.entries()) {
+      const bmp = await createImageBitmap(p.blob);
+      pages.push({ jpeg: new Uint8Array(await p.blob.arrayBuffer()), w: bmp.width, h: bmp.height, caption: `Job ${n + 1} · ${niceDate(v.date)} · ${visitWhere(v) || "Job"} · page ${i + 1} of ${kept.length}` });
+      bmp.close?.();
+    }
+    chapters.push({ title: `${niceDate(v.date)} · ${visitWhere(v) || "Job"}`, cost, pages });
+  }
+  // Contents: cover is page 1, then the contents page(s), then the rest.
+  const perPage = 30, entries = 1 + chapters.length, tocCount = Math.ceil((entries + 2) / perPage);
+  let at = 1 + tocCount;
+  const summaryAt = at; at += summaryPages.length;
+  const chapterAt = chapters.map(c => { const p = at; at += c.pages.length; return p; });
+  const totalPages = at;
+  const tocPages = [];
+  const tocLines = [{ title: "Summary: spend by year and timeline of work", to: summaryAt, bold: true },
+    ...chapters.map((c, i) => ({ title: `Job ${i + 1}: ${c.title}${c.cost != null ? " · " + money(c.cost) : ""}`, to: chapterAt[i] }))];
+  for (let p = 0; p < tocCount; p++) {
+    let ops = p ? "" : text(M, H - M - 20, "Contents", 20, true), y = H - M - (p ? 20 : 60);
+    const links = [];
+    for (const e of tocLines.slice(p ? perPage * p - 2 : 0, perPage * (p + 1) - 2)) {
+      const num = String(e.to + 1);
+      ops += text(M, y, e.title.length > 80 ? e.title.slice(0, 79) + "…" : e.title, 11, e.bold);
+      ops += `0.75 g ${(M + pdfWidth(e.title.slice(0, 80), 11) + 6).toFixed(1)} ${(y + 2).toFixed(1)} ${Math.max(0, W - M - 30 - (M + pdfWidth(e.title.slice(0, 80), 11) + 6)).toFixed(1)} 0.6 re f 0 g\n`;
+      ops += text(W - M - pdfWidth(num, 11), y, num, 11, e.bold);
+      links.push({ rect: [M, y - 4, W - M, y + 12], to: e.to });
+      y -= 22;
+    }
+    tocPages.push({ ops, links });
+  }
+  // The cover.
+  const cover = { ops: text(M, H - 200, "Service history", 34, true) + plateOps(W - M, H - 204, plate || "", 22) +
+    text(M, H - 240, car, 16) +
+    text(M, H - 290, [`${visits.length} job${visits.length === 1 ? "" : "s"}`, total ? `${money(total)} spent` : "", miles ? `${miles.toLocaleString()} miles latest` : ""].filter(Boolean).join(" · "), 13) +
+    (visits.length ? text(M, H - 312, `${niceDate(visits[0].date)} to ${niceDate(visits.at(-1).date)}`, 12, false, true) : "") +
+    text(M, 90, `Prepared with Porter on ${niceDate(todayIso())}.`, 10, false, true) +
+    text(M, 74, "Owners' personal details are redacted throughout.", 10, false, true), bookmark: "Cover" };
+  const all = [cover, ...tocPages.map((p, i) => ({ ...p, bookmark: i ? null : "Contents" })),
+    ...summaryPages.map((p, i) => ({ ...p, bookmark: i ? null : "Summary" })),
+    ...chapters.flatMap((c, n) => c.pages.map((p, i) => ({ ...p, bookmark: i ? null : `Job ${n + 1}: ${c.title}` })))];
+  // Headers and page numbers on every page but the cover.
+  const sectionOf = i => i <= tocCount ? "Contents" : i < chapterAt[0] || !chapters.length ? "Summary" : `Job ${chapterAt.filter(p => p <= i).length}`;
+  all.forEach((p, i) => {
+    if (!i) return;
+    const head = `Service history${plate ? " · " + plate : ""}`, sec = sectionOf(i), foot = `Page ${i + 1} of ${totalPages}`;
+    p.extra = text(M, H - 22, head, 8, false, true) + text(W - M - pdfWidth(sec, 8), H - 22, sec, 8, false, true) +
+      `0.85 G 0.5 w ${M} ${H - 28} m ${W - M} ${H - 28} l S 0 G\n` + text((W - pdfWidth(foot, 8)) / 2, 18, foot, 8, false, true);
+  });
+  return { blob: buildPdf(all), pages: totalPages, jobs: visits.length, reg };
+}
+$("bookBtn").onclick = async () => {
+  if (!carVisits().length) { setStatus("Nothing to put in the book yet: add a document first.", "error", $("historyStatus")); return; }
+  $("bookBtn").disabled = true;
+  setStatus("Making the book…", "busy", $("historyStatus"));
+  try {
+    const { blob, pages: n, jobs, reg } = await buildBook();
+    const file = new File([blob], `Service history book${reg ? " " + reg : ""} ${todayIso()}.pdf`, { type: "application/pdf" });
+    let shared = false;
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: file.name }); shared = true; }
+      catch (err) { if (err.name === "AbortError") { setStatus("", "", $("historyStatus")); return; } }
+    }
+    if (!shared) { const url = URL.createObjectURL(file); el("a", { href: url, download: file.name }).click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    setStatus(`Made the service history book: ${n} pages, ${jobs} job${jobs === 1 ? "" : "s"}.`, "", $("historyStatus"));
+  } catch (err) { setStatus(`Couldn't make the book (${err.message}).`, "error", $("historyStatus")); }
+  finally { $("bookBtn").disabled = false; }
+};
+
 $("exportBtn").onclick = async () => {
   if (!carVisits().length) { setStatus("Nothing to export yet: add a document first.", "error", $("historyStatus")); return; }
   $("exportBtn").disabled = true;
