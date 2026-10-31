@@ -758,7 +758,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-41";
+const APP_VERSION = "2026.10.31-42";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -2754,6 +2754,34 @@ function loadHistory() {
   return { visits: [], notes: [], feedback: [] };
 }
 const saved = loadHistory();
+// One garage, many spellings: "L & M Autocare Ltd", "L and M Autocare",
+// landmautocare.co.uk. Names are compared by their words, with & as "and"
+// and Ltd/Limited/www/.co.uk dropped; one name that starts with all of
+// another's words is the same business too ("RAC" and "RAC Mobile Mechanics").
+const garageWords = n => String(n || "").toLowerCase().replace(/https?:\/\/|www\./g, "").replace(/\.(co\.uk|com|uk|net|org)\b.*$/, "")
+  .replace(/[&+]/g, " and ").replace(/['’]s\b/g, "s").replace(/[^a-z0-9]+/g, " ").trim().split(" ")
+  .filter(w => w && !["ltd", "limited", "plc", "the", "co"].includes(w));
+function sameGarage(a, b) {
+  const A = garageWords(a), B = garageWords(b);
+  if (!A.length || !B.length) return false;
+  if (A.join("") === B.join("")) return true;
+  const [s, l] = A.length <= B.length ? [A, B] : [B, A];
+  return s.join("").length >= 3 && s.every((w, i) => l[i] === w);
+}
+// Every job's garage gets one spelling: the one used most (then the longest).
+function unifyGarages() {
+  const named = saved.visits.filter(v => v.garage_name && v.service_mode !== "diy");
+  const groups = [];
+  for (const v of named) { const g = groups.find(g => sameGarage(g[0].garage_name, v.garage_name)); g ? g.push(v) : groups.push([v]); }
+  let changed = false;
+  for (const g of groups) {
+    const count = {};
+    g.forEach(v => { count[v.garage_name] = (count[v.garage_name] || 0) + 1; });
+    const best = Object.keys(count).sort((a, b) => count[b] - count[a] || b.length - a.length)[0];
+    g.forEach(v => { if (v.garage_name !== best) { v.garage_name = best; changed = true; } });
+  }
+  return changed;
+}
 // More than one car: each job belongs to the car on its paperwork (or the car
 // being looked at when it had none). History, Coming up, Export and Sell show
 // one car at a time; DVLA/MOT details are kept per car.
@@ -2807,8 +2835,8 @@ function storeVisit(doc) {
   if (!v) { saveVisit(doc); keepCopy(saved.visits.find(x => x.id === lastVisitId)); return; }
   // A receipt from someone other than this job's garage (eBay, a motor
   // factor): its items are parts the owner bought for the job.
-  const seller = (doc.garage_name || "").toLowerCase(), garage = (v.garage_name || "").toLowerCase();
-  if (v.service_mode !== "diy" && (doc.doc_type !== "service_invoice" || (seller && garage && !seller.includes(garage) && !garage.includes(seller))))
+  const seller = doc.garage_name || "", garage = v.garage_name || "";
+  if (v.service_mode !== "diy" && (doc.doc_type !== "service_invoice" || (seller && garage && !sameGarage(seller, garage))))
     for (const li of doc.line_items || []) { li.own = true; if (li.line_total == null && doc.line_items.length === 1) li.line_total = doc.amount_paid ?? doc.total_cost; }
   for (const k of VISIT_FIELDS) {
     if (k === "possibly_missing") continue;
@@ -3345,7 +3373,8 @@ function setWho(v, who) {
   setStatus(who === "diy" ? `Marked the ${niceDate(v.date)} job as DIY.` : who === "parts" ? `Marked the ${niceDate(v.date)} job as a parts purchase.` : `The ${niceDate(v.date)} job is now under ${who}.`, "", $("historyStatus"));
 }
 function whoPicker(v, bare = false) {
-  const garages = [...new Set(saved.visits.filter(x => x.garage_name && !["diy", "parts"].includes(x.service_mode)).map(x => x.garage_name))].sort();
+  const garages = [...new Set(saved.visits.filter(x => x.garage_name && !["diy", "parts"].includes(x.service_mode)).map(x => x.garage_name))]
+    .filter((g, i, all) => !all.slice(0, i).some(h => sameGarage(g, h))).sort();
   const now = ["diy", "parts"].includes(v.service_mode) ? v.service_mode : v.garage_name || "";
   const sel = el("select", { ariaLabel: "Who did this work", style: "width:auto;max-width:13em;margin:0;font-size:13px;padding:4px" },
     ...(now ? [] : [el("option", { value: "" }, "Not known: choose…")]),
@@ -3537,6 +3566,8 @@ function renderCarBar() {
   }
 }   // var: renderHistory can run before this line on load
 function renderHistory() {
+  if (unifyGarages()) saveHistory();
+  loadSale();
   const visits = [...carVisits()].sort(byDateDesc);
   if (lastVisitId) shutVisits.delete(lastVisitId);
   renderCarBar();
@@ -3615,7 +3646,8 @@ $("clearHistory").onclick = e => {
   if (!confirm("Delete all saved visits and advice notes from this browser?")) return;
   saved.visits = []; saved.notes = []; saved.feedback = []; saved.cars = []; saved.vehicles = {}; store.del("porter.car"); lastVisitId = ""; saveHistory(); renderHistory(); renderDueDates();
   pageStore.clear();
-  $("saleOut").hidden = true;
+  $("saleOut").hidden = true; sale = null; saleFor = null;
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith("porter.sale:")) store.del(k); } catch {}
 };
 
 // Verbal advice: what the mechanic said but didn't write down. Claude turns
@@ -3820,6 +3852,16 @@ const SALE_SCHEMA = {"type": "object", "properties": {"headline": {"type": "stri
 const SALE_SYSTEM = "You write the summary a private seller gives buyers of their used car, from the\ncar's service records and the owner's notes of what mechanics told them. Use only\nfacts in the records; never invent work, parts, condition or history.\n\nheadline: one line with the year, make and model, mileage and the strongest true\nclaim about its history, e.g. \"2018 Ford Focus 1.0 EcoBoost, 48,210 miles, serviced\nevery year since 2019\". Only say \"full service history\" if the records show a\nservice at least every 15 months with no gaps.\n\nvalue_points: 3 to 6 concrete selling points, each with its month and year, e.g.\n\"Four new tyres, Oct 2026\", \"Cambelt and water pump replaced at 60,000 miles\".\nPrefer recent and expensive work, MOT passes without advisories, and regular\nservicing. Mention money only if costs are included in the records.\n\nknown_issues: an honest list of advisories and mechanic's advice that a later\nrecord does not show as fixed, with when it was raised and anything due soon\n(e.g. \"MOT due March 2027\"). Plain, factual wording; disclosure builds a buyer's\ntrust. Empty if there are none.\n\nBritish English, no exclamation marks, no sales clichés.";
 
 let sale = null;   // last Claude output, re-rendered when the options change
+// Kept per car in this browser, so it survives switching tabs or apps (a
+// phone may reload the page when you come back to it).
+let saleFor = null;
+function loadSale() {
+  const car = currentCar() || "";
+  if (saleFor === car) return;
+  saleFor = car;
+  try { sale = JSON.parse(store.get("porter.sale:" + car) || "null"); } catch { sale = null; }
+  if (sale) renderSale(); else $("saleOut").hidden = true;
+}
 
 function saleRecords() {
   const costs = $("sellCosts").checked;
@@ -3851,7 +3893,8 @@ $("sellBtn").onclick = async () => {
   setStatus("Writing the sale summary…", "busy", status);
   try {
     const msg = await callClaude(cred, body);
-    sale = { ...JSON.parse(msg.content.find(b => b.type === "text")?.text), costs: $("sellCosts").checked };
+    sale = { ...JSON.parse(msg.content.find(b => b.type === "text")?.text), costs: $("sellCosts").checked, at: todayIso() };
+    store.set("porter.sale:" + (currentCar() || ""), JSON.stringify(sale)); saleFor = currentCar() || "";
     renderSale();
     setStatus(`Done, ~$${costUsd(msg, model).toFixed(4)}. Check every line before you share it.`, "", status);
   } catch (err) {
