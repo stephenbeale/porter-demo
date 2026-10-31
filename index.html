@@ -639,7 +639,7 @@ h3.panel-head { justify-content: flex-start; }
         <input id="googleClientId" type="text" autocomplete="off" spellcheck="false" placeholder="123…apps.googleusercontent.com">
         <p class="muted">Porter can only see files it creates in your Drive, nothing else.</p>
       </details>
-      <p class="muted small">Both include the service history book, a summary PDF laid out like this page, and a folder for each visit with its redacted pages. Google Drive gets them as real folders, in a "Porter" folder; the zip can go to Dropbox or OneDrive from your Downloads.</p>
+      <p class="muted small">Both include your service history as a book (PDF), a summary PDF laid out like this page, and a folder for each visit with its redacted pages. Google Drive gets them as real folders, in a "Porter" folder; the zip can go to Dropbox or OneDrive from your Downloads.</p>
       <input id="restoreFile" type="file" accept="application/json,.json">
       <p class="muted small">A backup is one file with your history and kept documents (personal details already redacted). Use it to move to a new phone or into the Home Screen app.</p>
     </section>
@@ -4048,7 +4048,7 @@ $("driveBtn").onclick = async () => {
       await driveUpload(file, f.data, f.type, parent);
     }
     const link = el("a", { href: `https://drive.google.com/drive/folders/${top}`, target: "_blank", rel: "noopener" }, "Open it in Drive");
-    $("historyStatus").className = "status"; $("historyStatus").replaceChildren(`Saved to Google Drive, in Porter › ${name}: the service history book and summary PDFs, and ${set.folders} visit folder${set.folders === 1 ? "" : "s"} with ${set.pages} page${set.pages === 1 ? "" : "s"}. `, link);
+    $("historyStatus").className = "status"; $("historyStatus").replaceChildren(`Saved to Google Drive, in Porter › ${name}: your service history as a book (PDF), the summary PDF, and ${set.folders} visit folder${set.folders === 1 ? "" : "s"} with ${set.pages} page${set.pages === 1 ? "" : "s"}. `, link);
   } catch (err) {
     setStatus(`Couldn't save to Google Drive: ${err.message}.`, "error", $("historyStatus"));
   } finally { $("driveBtn").disabled = false; }
@@ -4192,7 +4192,7 @@ $("bookBtn").onclick = async () => {
       catch (err) { if (err.name === "AbortError") { setStatus("", "", $("historyStatus")); return; } }
     }
     if (!shared) { const url = URL.createObjectURL(file); el("a", { href: url, download: file.name }).click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-    setStatus(`Made the service history book: ${n} pages, ${jobs} job${jobs === 1 ? "" : "s"}.`, "", $("historyStatus"));
+    setStatus(`Exported your service history as a book (PDF): ${n} pages, ${jobs} job${jobs === 1 ? "" : "s"}.`, "", $("historyStatus"));
   } catch (err) { setStatus(`Couldn't make the book (${err.message}).`, "error", $("historyStatus")); }
   finally { $("bookBtn").disabled = false; }
 };
@@ -4212,7 +4212,7 @@ $("exportBtn").onclick = async () => {
     }
     if (!shared) { const url = URL.createObjectURL(file); el("a", { href: url, download: file.name }).click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
     const missing = carVisits().filter(v => !v.keptPages && v.source !== "dvsa").length;
-    setStatus(`${shared ? "Shared" : "Downloaded"} "${file.name}": the service history book and summary PDFs, and ${folders} visit folder${folders === 1 ? "" : "s"} with ${n} page${n === 1 ? "" : "s"}, for ${visits} visit${visits === 1 ? "" : "s"}.` +
+    setStatus(`${shared ? "Shared" : "Downloaded"} "${file.name}": your service history as a book (PDF), the summary PDF, and ${folders} visit folder${folders === 1 ? "" : "s"} with ${n} page${n === 1 ? "" : "s"}, for ${visits} visit${visits === 1 ? "" : "s"}.` +
       (shared ? "" : " To put it in Drive, Dropbox or OneDrive, open your Downloads (or the download notice) and share it to that app.") +
       (missing ? ` ${missing} older visit${missing === 1 ? " has" : "s have"} no kept pages, so ${missing === 1 ? "it's" : "they're"} in the PDF only.` : ""), "", $("historyStatus"));
   } catch (err) {
