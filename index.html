@@ -49,6 +49,15 @@ input[type=file] { display: none; }
 #viewer .bar button { min-height: 40px; padding: 6px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-size: 15px; }
 #viewer .scroll { flex: 1; overflow: auto; touch-action: pan-x pan-y pinch-zoom; }
 #viewer img { width: 100%; display: block; }
+.crop-scroll { display: flex; align-items: flex-start; justify-content: center; padding: 12px; }
+.crop-stage { position: relative; touch-action: none; user-select: none; max-width: 100%; }
+.crop-stage img { width: auto; max-width: 100%; max-height: calc(100vh - 120px); }
+.crop-box { position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move; }
+.crop-h { position: absolute; width: 28px; height: 28px; border: 4px solid #4493f8; background: rgba(255,255,255,.2); }
+.crop-h.nw { left: -6px; top: -6px; border-right: 0; border-bottom: 0; cursor: nwse-resize; }
+.crop-h.ne { right: -6px; top: -6px; border-left: 0; border-bottom: 0; cursor: nesw-resize; }
+.crop-h.sw { left: -6px; bottom: -6px; border-right: 0; border-top: 0; cursor: nesw-resize; }
+.crop-h.se { right: -6px; bottom: -6px; border-left: 0; border-top: 0; cursor: nwse-resize; }
 .thumb { position: relative; flex: none; }
 .thumb .state { position: absolute; inset: 0; border-radius: 8px; display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 14px; color: #fff; text-align: center; padding: 6px; pointer-events: none; }
@@ -360,6 +369,14 @@ h3.panel-head { justify-content: flex-start; }
       </div>
     </div>
     <p class="muted small" id="thumbHint" hidden>Tap a page to see it full size.</p>
+    <div class="ask small" id="cropAsk" hidden>
+      <p style="margin:0 0 8px">✂️ <span id="cropAskText"></span></p>
+      <div class="row">
+        <button class="btn" id="cropYes" type="button">Crop to the paperwork</button>
+        <button class="btn secondary" id="cropNo" type="button">No thanks</button>
+      </div>
+      <p class="muted" style="margin:6px 0 0">Or tap a page to crop or turn it yourself.</p>
+    </div>
     <div class="row" style="margin-top:12px">
       <button class="btn" id="scanBtn" type="button" hidden>Process</button>
       <button class="btn secondary" id="clearBtn" type="button" hidden>Remove</button>
@@ -647,7 +664,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.10.31-13";
+const APP_VERSION = "2026.10.31-14";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a total that doesn't match the receipt, a sheet the invoice\nrefers to. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -1046,12 +1063,54 @@ function openViewer(i) {
         sel.onchange = () => { if (sel.value) { movePage(p, sel.value); openViewer(i); } };
         return el("label", { className: "small", style: "display:flex;gap:6px;align-items:center;margin:0;color:#fff;font-weight:500" }, "Part of", sel);
       })()] : []),
+      ...($("deviceCheck").hidden && !processing ? [btn("✂️ Crop", () => cropView(i)), btn("↻ Rotate", () => { replacePage(p, rotated(p.small, 90)); p.straightened = true; openViewer(i); })] : []),
       btn("Remove", () => { closeViewer(); removePage(i); }),
       btn("Close", closeViewer)),
     el("div", { className: "scroll" }, numbered(el("img", { src: p.small.toDataURL("image/jpeg", 0.85), alt: `Upload ${i + 1}` }), i + 1)));
   document.body.append(v);
 }
 function closeViewer() { $("viewer")?.remove(); }
+$("cropYes").onclick = () => { for (const p of pages.filter(p => p.cropTo && !p.cropDecided)) cropPage(p, p.cropTo); offerCrops(); };
+$("cropNo").onclick = () => { for (const p of pages) if (p.cropTo) p.cropDecided = true; offerCrops(); };
+// Crop by hand: a box with corner handles over the page; drag the corners,
+// or the box itself.
+function cropView(i) {
+  const p = pages[i];
+  closeViewer();
+  const img = el("img", { src: p.small.toDataURL("image/jpeg", 0.85), alt: `Upload ${i + 1}`, draggable: false });
+  let f = p.cropTo ? { ...p.cropTo } : { x0: 0.05, y0: 0.05, x1: 0.95, y1: 0.95 };
+  const box = el("div", { className: "crop-box" }, ...["nw", "ne", "sw", "se"].map(c => { const h = el("span", { className: "crop-h " + c }); h.dataset.c = c; return h; }));
+  const stage = el("div", { className: "crop-stage" }, img, box);
+  const place = () => Object.assign(box.style, { left: f.x0 * 100 + "%", top: f.y0 * 100 + "%", width: (f.x1 - f.x0) * 100 + "%", height: (f.y1 - f.y0) * 100 + "%" });
+  place();
+  let drag = null;
+  stage.onpointerdown = e => {
+    const r = stage.getBoundingClientRect(), at = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+    const c = e.target.dataset?.c || (e.target === box ? "move" : null);
+    if (!c) return;
+    drag = { c, at, f: { ...f } }; stage.setPointerCapture(e.pointerId); e.preventDefault();
+  };
+  stage.onpointermove = e => {
+    if (!drag) return;
+    const r = stage.getBoundingClientRect(), dx = (e.clientX - r.left) / r.width - drag.at.x, dy = (e.clientY - r.top) / r.height - drag.at.y, o = drag.f, min = 0.1;
+    const cl = v => Math.min(1, Math.max(0, v));
+    if (drag.c === "move") { const w = o.x1 - o.x0, h = o.y1 - o.y0, x0 = Math.min(1 - w, Math.max(0, o.x0 + dx)), y0 = Math.min(1 - h, Math.max(0, o.y0 + dy)); f = { x0, y0, x1: x0 + w, y1: y0 + h }; }
+    else {
+      f = { ...o };
+      if (drag.c.includes("w")) f.x0 = Math.min(cl(o.x0 + dx), f.x1 - min); else f.x1 = Math.max(cl(o.x1 + dx), f.x0 + min);
+      if (drag.c.includes("n")) f.y0 = Math.min(cl(o.y0 + dy), f.y1 - min); else f.y1 = Math.max(cl(o.y1 + dy), f.y0 + min);
+    }
+    place();
+  };
+  stage.onpointerup = stage.onpointercancel = () => { drag = null; };
+  const btn = (label, fn) => { const b = el("button", { type: "button" }, label); b.onclick = fn; return b; };
+  document.body.append(el("div", { id: "viewer", role: "dialog", ariaLabel: `Crop upload ${i + 1}` },
+    el("div", { className: "bar" }, el("span", {}, `Crop upload ${i + 1}`),
+      btn("Whole page", () => { f = { x0: 0, y0: 0, x1: 1, y1: 1 }; place(); }),
+      btn("✓ Apply", () => { closeViewer(); cropPage(p, f); openViewer(i); }),
+      btn("Cancel", () => openViewer(i))),
+    el("div", { className: "scroll crop-scroll" }, stage)));
+}
 addEventListener("keydown", e => { if (e.key === "Escape") closeViewer(); });
 
 function removePage(i) {
@@ -1198,6 +1257,7 @@ function resetPages() {
   if (prepBusy) { ocrWorker?.terminate?.(); ocrWorker = null; }
   prepGen++; prepBusy = 0; prepQueue = peopleQueue = Promise.resolve(); prepNote("");
   closeWebcam();
+  $("cropAsk").hidden = true;
   pages = []; laterDocs = []; docOf = { n: 1, total: 1 }; result = null; $("results").hidden = true; $("deviceCheck").hidden = true; $("addCard").hidden = false;
   lastVisitId = "";
   $("scanBtn").disabled = false;
@@ -1319,6 +1379,40 @@ async function straighten(p, gen) {
   } catch {}   // the read below still checks each way up if this couldn't
   finally { if (!p.prepared && pages.includes(p)) markThumb(pages.indexOf(p), processing ? "waiting" : null, processing ? "Waiting" : ""); }
 }
+// Where the paperwork is: the words read on the page, with a margin. A
+// photo with lots of background around them gets a crop suggested.
+function suggestCrop(data, c) {
+  const words = [];
+  for (const b of data.blocks || []) for (const para of b.paragraphs || []) for (const l of para.lines || []) for (const w of l.words || [])
+    if (w.confidence > 60 && /[A-Za-z0-9]{2,}/.test(w.text)) words.push(w.bbox);
+  if (words.length < 15) return null;   // a photo of a part, not paperwork
+  const xs = words.flatMap(b => [b.x0, b.x1]).sort((a, b) => a - b), ys = words.flatMap(b => [b.y0, b.y1]).sort((a, b) => a - b);
+  const mx = c.width * 0.05, my = c.height * 0.05;   // never clip a word that was read
+  const box = { x0: Math.max(0, xs[0] - mx), y0: Math.max(0, ys[0] - my), x1: Math.min(c.width, xs.at(-1) + mx), y1: Math.min(c.height, ys.at(-1) + my) };
+  const kept = (box.x1 - box.x0) * (box.y1 - box.y0) / (c.width * c.height);
+  return kept < 0.7 ? { x0: box.x0 / c.width, y0: box.y0 / c.height, x1: box.x1 / c.width, y1: box.y1 / c.height } : null;
+}
+// Cropping or turning a page starts its on-phone reading again, so the
+// redaction boxes match the new picture.
+function replacePage(p, canvas) {
+  p.small = p.full = canvas;
+  Object.assign(p, { prepared: false, read: false, local: undefined, ocrText: "", textPx: null, person: undefined, peopleChecked: false, unchecked: false, ocrError: undefined, anchors: null, badge: null, cropTo: null, cropDecided: true });
+  renderPages(); offerCrops();
+  queuePrepare([p]);
+}
+function cropPage(p, f) {
+  const src = p.small, x = Math.round(f.x0 * src.width), y = Math.round(f.y0 * src.height);
+  const c = el("canvas", { width: Math.max(1, Math.round((f.x1 - f.x0) * src.width)), height: Math.max(1, Math.round((f.y1 - f.y0) * src.height)) });
+  c.getContext("2d").drawImage(src, x, y, c.width, c.height, 0, 0, c.width, c.height);
+  replacePage(p, c);
+}
+function offerCrops() {
+  const todo = pages.filter(p => p.cropTo && !p.cropDecided && p.read);
+  $("cropAsk").hidden = !todo.length || !$("deviceCheck").hidden;
+  if (!todo.length) return;
+  const nums = todo.map(p => pages.indexOf(p) + 1);
+  $("cropAskText").textContent = `${todo.length > 1 ? `Uploads ${nums.join(", ")} have` : `Upload ${nums[0]} has`} a lot of background around the paperwork. Crop ${todo.length > 1 ? "them" : "it"} to the paperwork? Tighter pages read better, and cost less to send.`;
+}
 async function readPage(p, gen) {
   const stale = () => gen !== prepGen || !pages.includes(p);
   if (p.prepared || stale()) return;
@@ -1332,6 +1426,7 @@ async function readPage(p, gen) {
     if (rot) await turnThumb(p, rot);
     p.local = findPersonalData(data, pages.indexOf(p) + 1);
     p.ocrText = data.text || ""; p.textPx = smallPrintPx(data); p.unchecked = false;
+    p.cropTo = p.cropDecided ? null : suggestCrop(data, p.small);
   } catch (err) {
     if (stale()) return;
     ocrWorker?.terminate?.(); ocrWorker = null;   // a fresh one for the next page
@@ -1339,7 +1434,7 @@ async function readPage(p, gen) {
     if (err.message !== "timeout") p.ocrError = err.message;
   } finally { ocrProgress = () => {}; }
   p.read = true;
-  if (!stale()) markThumb(pages.indexOf(p), processing ? "waiting" : null, processing ? "Waiting" : "");
+  if (!stale()) { markThumb(pages.indexOf(p), processing ? "waiting" : null, processing ? "Waiting" : ""); offerCrops(); }
 }
 // The people check runs alongside, so a slow first download of its engine
 // never holds up reading the other pages; and it gives up after two minutes
@@ -1580,6 +1675,7 @@ $("scanBtn").onclick = async () => {
   const stopped = new Promise((_, rej) => { cancelRun = () => rej(new Error("cancelled")); });
   stopped.catch(() => {});
   processing = true; $("thumbs").classList.add("busy"); setRemoveLabel();
+  $("cropAsk").hidden = true;
   stayAwake(true); pausedNote = "";
   pages.forEach((p, i) => p.prepared ? prepMark(p, "", true) : markThumb(i, "waiting", "Waiting"));
   setStatus(pages.every(p => p.prepared) ? "" : "Processing… (the on-phone checks download about 14 MB the first time). Keep this screen open: phones pause web pages when locked.", "busy");
