@@ -768,7 +768,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.11.01-12";
+const APP_VERSION = "2026.11.01-13";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a sheet the invoice refers to. Only paperwork that shows the\nwork matters (the itemised invoice, its pages, an MOT certificate): never list a\npayment receipt, card slip or proof of payment. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -2951,7 +2951,7 @@ function visitSummaryTitle(v) {
   if (typesOf(v).length) return typesOf(v).map(jobTypeName).join(" + ");
   const items = v.line_items, cats = new Set(items.map(i => i.category)), parts = [];
   if (cats.has("engine_oil") && cats.has("oil_filter")) parts.push(["air_filter", "pollen_filter", "fuel_filter"].some(c => cats.has(c)) ? "Full service" : "Oil service");
-  if (cats.has("mot_test")) parts.push("MOT");
+  if (cats.has("mot_test") || v.has_mot) parts.push("MOT");
   const gs = new Set(items.map(i => groupOf(i.category)));
   for (const id of ["brakes", "tyres", "major", "electrical", "body"]) if (gs.has(id)) parts.push(GROUPS.find(g => g.id === id).label);
   if (parts.length) return parts.join(" + ");
@@ -3302,6 +3302,17 @@ function visitEntry(v) {
       pagesBtn.onclick = () => openKeptPages(v);
       edit.append(pagesBtn);
     }
+    const twin = !v.combineOk && sameVisitAs(v)[0];
+    if (twin) {
+      const yes = el("button", { type: "button", className: "btn edit-btn" }, `🔗 Combine with ${niceDate(twin.date)} · ${visitSummaryTitle(twin)}`);
+      yes.onclick = () => { openEdits.add(v.id); combineJobs(v, twin).then(m => { openEdits.add(m.id); jumpToVisit(m.id); }); };
+      const no = el("button", { type: "button", className: "btn secondary edit-btn" }, "They're separate jobs");
+      no.onclick = () => { v.combineOk = twin.combineOk = true; openEdits.add(v.id); saveHistory(); renderHistory(); };
+      edit.insertBefore(el("div", { className: "ask", style: "margin:0 0 8px" }, el("p", { className: "small", style: "margin:0 0 6px" }, el("b", {}, "Same visit?"), ` There's another job on ${niceDate(twin.date)}. A service and its MOT are usually one visit.`), yes, no), edit.children[1] || null);
+    }
+    const combine = el("button", { type: "button", className: "btn secondary edit-btn" }, "🔗 Combine with another job");
+    combine.onclick = () => combine.replaceWith(combinePanel(v));
+    edit.append(combine);
     if (v.source !== "dvsa" && (v.line_items.length > 0 || v.keptPages > 0)) {
       const split = el("button", { type: "button", className: "btn secondary edit-btn" }, "✂️ Split this job");
       split.onclick = () => { split.replaceWith(splitPanel(v)); };
@@ -3373,6 +3384,55 @@ async function movePageTo(v, i, to) {
   }
   saveHistory(); renderHistory();
   setStatus(target ? `Moved the page to ${to === "+" ? "a job of its own" : `the ${niceDate(target.date)} job`}. Move its items too if they belong there: tap an item in the job.` : "Removed the page.", "", $("historyStatus"));
+}
+// Combine two jobs that were one visit (a service invoice and its MOT
+// certificate, a receipt and its invoice): items, advisories, pages and
+// notes join the first, which keeps its own date and garage unless it had none.
+const daysApart = (a, b) => a.date && b.date ? Math.abs((new Date(a.date) - new Date(b.date)) / 864e5) : Infinity;
+const sameVisitAs = v => carVisits().filter(x => x.id !== v.id && x.car === v.car && daysApart(x, v) <= 1);
+async function combineJobs(main, other) {
+  // The garage's invoice leads, whichever was tapped.
+  if (other.doc_type === "service_invoice" && main.doc_type !== "service_invoice") [main, other] = [other, main];
+  const uniq = a => [...new Set(a.filter(Boolean))];
+  main.line_items = [...main.line_items, ...other.line_items];
+  main.work_items = uniq([...(main.work_items || []), ...(other.work_items || [])]);
+  main.advisories = uniq([...(main.advisories || []), ...(other.advisories || [])]);
+  main.brake_wear = [...(main.brake_wear || []), ...(other.brake_wear || [])];
+  for (const k of ["nsf", "osf", "nsr", "osr"]) if (main.tyre_depths_mm?.[k] == null && other.tyre_depths_mm?.[k] != null) (main.tyre_depths_mm ||= {})[k] = other.tyre_depths_mm[k];
+  if (main.total_cost != null || other.total_cost != null) main.total_cost = (main.total_cost || 0) + (other.total_cost || 0);
+  if (other.mileage != null && (main.mileage == null || other.mileage > main.mileage)) main.mileage = other.mileage;
+  for (const k of ["date", "garage_name", "garage_postcode", "mot_test_number", "next_due", "vin", "make_model", "registration"]) if (!main[k] && other[k]) main[k] = other[k];
+  const types = new Set([...typesOf(main), ...typesOf(other)]);
+  if (other.doc_type === "mot_certificate" || other.source === "dvsa" || other.has_mot) { types.add("mot"); main.has_mot = true; }
+  // Only an explicit type is recorded: MOT joins a type the owner had chosen;
+  // otherwise the title keeps being worked out from the (now combined) items.
+  if (typesOf(main).length || typesOf(other).length) main.job_type = Object.keys(JOB_TYPES).filter(t => types.has(t) && t !== "parts").join("+");
+  const motIn = types.has("mot") || main.line_items.some(i => i.category === "mot_test");
+  main.possibly_missing = (main.possibly_missing || []).filter(m => !(motIn && /mot certificate/i.test(m)));
+  const mine = await pageStore.get(main.id) || [], theirs = await pageStore.get(other.id) || [];
+  if (theirs.length) { await pageStore.set(main.id, [...mine, ...theirs]); main.keptPages = mine.length + theirs.length; }
+  await pageStore.del(other.id);
+  saved.notes.forEach(n => { if (n.visitId === other.id) n.visitId = main.id; });
+  saved.visits = saved.visits.filter(x => x.id !== other.id);
+  if (lastVisitId === other.id) lastVisitId = main.id;
+  openEdits.delete(other.id); shutVisits.delete(main.id);
+  saveHistory(); renderHistory();
+  toast(`🔗 Combined into one job: ${niceDate(main.date)}, ${visitSummaryTitle(main)}`);
+  return main;
+}
+function combinePanel(v) {
+  const others = carVisits().filter(x => x.id !== v.id).sort((a, b) => daysApart(a, v) - daysApart(b, v) || byDateDesc(a, b));
+  const sel = el("select", { ariaLabel: "Job to combine with", style: "margin:0;width:100%" },
+    el("option", { value: "" }, "Choose the other job…"),
+    ...others.map(x => el("option", { value: x.id }, `${niceDate(x.date)} · ${visitSummaryTitle(x)}${visitWhere(x) ? " · " + visitWhere(x) : ""}`)));
+  const go = el("button", { type: "button", className: "btn edit-btn" }, "🔗 Combine them");
+  go.onclick = () => {
+    const other = saved.visits.find(x => x.id === sel.value);
+    if (!other) { sel.focus(); return; }
+    if (!confirm(`Make the ${niceDate(v.date)} job and the ${niceDate(other.date)} job one job? Their items, notes and pages go together.`)) return;
+    openEdits.add(v.id); combineJobs(v, other).then(m => jumpToVisit(m.id));
+  };
+  return el("div", { className: "ask", style: "margin:8px 0" }, el("p", { className: "small", style: "margin:0 0 6px" }, "🔗 Combine with which job? Pick the one that was the same visit."), sel, go);
 }
 var historySummary = "", shutYears = new Set(), otherCar = null;
 // Paperwork for the wrong vehicle is easy to put right: any job can move to
@@ -3654,21 +3714,29 @@ function todosFor(v) {
   if (!v.garage_name && !["diy", "parts"].includes(v.service_mode) && !v.whoOk) t.push("who did the work");
   return t;
 }
+// Two jobs on the same day: one To do row (on the garage's invoice) offering to combine.
+function combineTodo(v) {
+  if (v.combineOk) return null;
+  const twin = sameVisitAs(v).find(x => !x.combineOk);
+  if (!twin) return null;
+  const lead = v.doc_type === "service_invoice" || (twin.doc_type !== "service_invoice" && v.id < twin.id);
+  return lead ? twin : null;
+}
 function renderTodo() {
   const box = $("todoBox");
   const jobs = [...carVisits()].sort(byDateDesc)
     .filter(v => !(v.id === lastVisitId && !$("justAdded").hidden))
-    .map(v => [v, todosFor(v)]).filter(([, t]) => t.length);
+    .map(v => [v, todosFor(v), combineTodo(v)]).filter(([, t, twin]) => t.length || twin);
   box.hidden = !jobs.length;
   if (!jobs.length) return;
   const shown = todoAll ? jobs : jobs.slice(0, 3);
-  const row = ([v, t]) => {
+  const row = ([v, t, twin]) => {
     const fix = el("button", { className: "btn", type: "button" }, "Fix");
     fix.onclick = () => { openEdits.add(v.id); jumpToVisit(v.id); };
     const ignore = el("button", { className: "btn secondary", type: "button" }, "Ignore");
-    ignore.onclick = () => { v.keysOk = true; v.possibly_missing = []; v.whoOk = true; saveHistory(); renderHistory(); toast("OK, Porter won't ask about that job again."); };
+    ignore.onclick = () => { v.keysOk = true; v.possibly_missing = []; v.whoOk = true; v.combineOk = true; sameVisitAs(v).forEach(x => { x.combineOk = true; }); saveHistory(); renderHistory(); toast("OK, Porter won't ask about that job again."); };
     const name = [niceDate(v.date), visitWhere(v) || visitSummaryTitle(v)].filter(Boolean).join(" · ");
-    return el("div", { className: "todo-row" }, el("div", { className: "what" }, el("b", {}, name), el("br"), el("span", { className: "muted" }, "Add " + t.join(", "))), fix, ignore);
+    return el("div", { className: "todo-row" }, el("div", { className: "what" }, el("b", {}, name), el("br"), el("span", { className: "muted" }, [t.length ? "Add " + t.join(", ") : "", twin ? `🔗 Same day as the ${visitSummaryTitle(twin)}: combine them?` : ""].filter(Boolean).join(". "))), fix, ignore);
   };
   const more = jobs.length > 3 ? el("button", { type: "button", className: "linkish small", style: "margin-top:6px;background:none;border:0;color:var(--accent);padding:0" }, todoAll ? "Show fewer" : `Show all ${jobs.length}`) : null;
   if (more) more.onclick = () => { todoAll = !todoAll; renderTodo(); };
