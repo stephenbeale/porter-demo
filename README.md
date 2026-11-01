@@ -4,4 +4,18 @@ Scan a vehicle service document with your phone. **Your personal details are red
 
 On iPhone, add it to your Home Screen (Share → Add to Home Screen) and use it from there: Safari deletes a site's saved data after 7 days without a visit, but Home Screen apps keep theirs. Back up and Restore (under "Your car's history") move your history between browsers, phones or into the Home Screen app.
 
-**Beta testers** can use an invite code instead of an API key, through the Porter beta server (the `worker/` folder in the private porter repo). It holds the key, caps spend, and adds **MOT history import**: every DVSA MOT test for a registration, plus DVLA road tax and MOT due dates. Set `BETA_SERVER` in `index.html` to the deployed Worker's URL, then send invite links like `?invite=<code>`. With `BETA_SERVER` empty, the page works as before with your own key.
+## Stack
+
+A mobile web app (PWA) in plain JavaScript, hosted on GitHub Pages. Claude reads the paperwork; personal details are blacked out on the phone first, using OCR in the browser; a Cloudflare Worker sits in front of the AI for beta testers.
+
+| Layer | What's used |
+|---|---|
+| **App** | One HTML file: plain JavaScript and CSS, no framework, no build step. An installable PWA (web app manifest and home-screen icons; no service worker yet, so it needs a connection), hosted on **GitHub Pages**. |
+| **AI** | **Claude** via the Anthropic API: **Opus 5.5** reads each document into structured data (JSON schema output); **Haiku 5.5** sorts photo batches into visits and turns typed descriptions of work into line items. |
+| **On the phone** | **Tesseract.js** (OCR) finds personal details to black out before anything is sent; **Human** (TensorFlow.js, WASM) spots people in photos; **pdf.js** turns PDFs into page images. |
+| **Storage** | On the phone only: **localStorage** for history, **IndexedDB** for the kept, redacted pages. No server database. |
+| **Exports** | Service history book PDF and zip built by the app's own code; **Google Drive** upload via Google Identity Services (`drive.file` scope); calendar reminders as **.ics**. |
+| **Beta server** | **Cloudflare Worker** + **Workers KV** (porter repo, `worker/`): holds the API key, invite codes and **Google sign-in** (ID tokens checked against an email allowlist), per-tester spend caps, and **DVSA/DVLA** lookups for MOT history and tax status. |
+| **Paused full version** | `porter/web`: **React 19 + TypeScript + Vite**, **Supabase** (auth, Postgres, storage), deployed on Cloudflare. |
+
+**Beta testers** can sign in with Google or use an invite code instead of an API key, through the Porter beta server (the `worker/` folder in the private porter repo). It holds the key, caps spend, and adds **MOT history import**: every DVSA MOT test for a registration, plus DVLA road tax and MOT due dates. Set `BETA_SERVER` in `index.html` to the deployed Worker's URL, then send invite links like `?invite=<code>`. With `BETA_SERVER` empty, the page works as before with your own key.
