@@ -175,11 +175,26 @@ button.plate { cursor: pointer; padding: 0; font-family: "Arial Narrow", Arial, 
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .card-head h2 { margin: 0; }
 .hide-btn { border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 6px 14px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
-html { scroll-padding-top: calc(var(--nav-h, 90px) + 12px); }   /* jumps land below the sticky tabs */
-.navtabs { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 10px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0; }
-.navtab { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.15; padding: 7px 4px; border-radius: 14px; border: 1px solid var(--rule); background: var(--card); color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; }
-.navtab .ico { font-size: 20px; line-height: 1.1; }
-.navtab[aria-current=page] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+/* The tabs sit in a bar along the bottom, in thumb reach; Add is the big one
+   in the middle. Jumps land clear of it. */
+html { scroll-padding-top: 12px; scroll-padding-bottom: calc(var(--nav-h, 76px) + 12px); }
+main { padding-bottom: 24px !important; }
+body { padding-bottom: calc(var(--nav-h, 76px) + 16px); }
+.navtabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; gap: 4px; align-items: flex-end;
+  max-width: 640px; margin: 0 auto; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); background: var(--card);
+  border-top: 1px solid var(--rule); box-shadow: 0 -4px 14px rgba(0,0,0,.12); }
+.navtabs.away { display: none; }
+.navtab { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.15; padding: 6px 2px; border-radius: 12px; border: 0; background: transparent; color: var(--text-2); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.navtab .ico { font-size: 22px; line-height: 1.1; }
+.navtab[aria-current=page] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.navtab.add { flex: 0 0 64px; }
+.navtab.add .ico { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin-top: -22px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text); font-size: 26px; box-shadow: 0 3px 10px rgba(0,0,0,.25); border: 3px solid var(--card); }
+.navtab.add[aria-current=page] { background: transparent; }
+/* Jump chips at the top of History: straight to a section, opened. */
+.jump-chips { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 10px; padding-bottom: 2px; scrollbar-width: none; }
+.jump-chips::-webkit-scrollbar { display: none; }
+.jump-chip { flex: none; border: 1px solid var(--rule); background: var(--card); color: var(--text); border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 section[data-tab].off-tab { display: none !important; }
 details > summary { font-weight: 600; }
 .visit { position: relative; padding: 10px 12px; margin: 12px 0; border: 1px solid var(--rule); border-radius: 12px; background: color-mix(in srgb, var(--text) 3%, var(--card)); }
@@ -299,7 +314,7 @@ h3.panel-head { justify-content: flex-start; }
 .year-checks span { display: block; }
 .visit-cost { display: block; font-weight: 600; font-size: .95em; margin-top: 2px; }
 .item-row { cursor: pointer; }
-#toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px;
+#toast { position: fixed; left: 50%; bottom: calc(var(--nav-h, 76px) + 16px); z-index: 30; transform: translate(-50%, 20px); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px;
   background: var(--good); color: #fff; font-weight: 600; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.35); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60; }
 #toast.bad { background: var(--bad); }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -387,8 +402,8 @@ h3.panel-head { justify-content: flex-start; }
   </div>
   <nav class="navtabs" id="mainTabs" aria-label="Sections">
     <button class="navtab" type="button" data-tab="history" aria-current="page"><span class="ico" aria-hidden="true">✍️</span>History</button>
-    <button class="navtab" type="button" data-tab="scan"><span class="ico" aria-hidden="true">➕</span>Add</button>
     <button class="navtab" type="button" data-tab="notes"><span class="ico" aria-hidden="true">🔧</span>Mechanic</button>
+    <button class="navtab add" type="button" data-tab="scan"><span class="ico" aria-hidden="true">➕</span>Add</button>
     <button class="navtab" type="button" data-tab="calendar"><span class="ico" aria-hidden="true">📅</span>Calendar</button>
     <button class="navtab" type="button" data-tab="sell"><span class="ico" aria-hidden="true">🤝</span>Sell</button>
   </nav>
@@ -685,6 +700,7 @@ h3.panel-head { justify-content: flex-start; }
         <button class="btn secondary" type="button" data-go="diy">🔧 Log DIY work</button>
       </div>
     </div>
+    <div class="jump-chips" id="jumpChips" hidden></div>
     <div class="panel-tools" id="panelTools" hidden>
       <button class="fold-btn" id="panelsShut" type="button"><span class="fold-ico up" aria-hidden="true"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></span>Collapse all</button>
       <button class="fold-btn" id="panelsOpen" type="button"><span class="fold-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>Expand all</button>
@@ -827,7 +843,7 @@ h3.panel-head { justify-content: flex-start; }
 <script>
 // Bumped with every change. The footer shows it, and Porter checks the live
 // copy now and then so a stale cached version says so.
-const APP_VERSION = "2026.11.07-9";
+const APP_VERSION = "2026.11.08-1";
 const SCHEMA = {"type": "object", "properties": {"doc_type": {"type": "string", "enum": ["service_invoice", "mot_certificate", "mot_history", "v5c", "receipt", "other"]}, "registration": {"type": "string"}, "vin": {"type": "string"}, "make_model": {"type": "string"}, "date_first_registered": {"type": "string", "description": "YYYY-MM-DD"}, "date": {"type": "string", "description": "Document date, YYYY-MM-DD"}, "invoice_number": {"type": "string"}, "mileage": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "garage_name": {"type": "string", "description": "Business name only; a business is not personal data"}, "garage_address": {"type": "string", "description": "The business's own address"}, "garage_postcode": {"type": "string", "description": "The business's own UK postcode"}, "service_mode": {"type": "string", "enum": ["garage", "mobile", "unknown"], "description": "mobile = work done at the customer's location (e.g. RAC patrol)"}, "work_items": {"type": "array", "items": {"type": "string"}}, "line_items": {"type": "array", "items": {"type": "object", "properties": {"description": {"type": "string"}, "category": {"type": "string", "description": "The closest of: engine_oil, oil_filter, air_filter, pollen_filter, fuel_filter, spark_plugs, brake_pads_front, brake_pads_rear, brake_discs_front, brake_discs_rear, brake_fluid, coolant, timing_belt, aux_belt, tyre, battery, alternator, starter_motor, bulb, wipers, clutch, exhaust, suspension, screenwash, mot_test, labour, diagnostics, bodywork (doors, panels, bumpers, mirrors, paint), glass (windscreen, windows), other."}, "quantity": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "unit_price": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "line_total": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["description", "category", "quantity", "unit_price", "line_total"], "additionalProperties": false}}, "tyre_depths_mm": {"type": "object", "properties": {"nsf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osf": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "nsr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "osr": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}}, "required": ["nsf", "osf", "nsr", "osr"], "additionalProperties": false, "description": "Tread depth per wheel if recorded; nsf = nearside (left) front"}, "brake_wear": {"type": "array", "items": {"type": "object", "properties": {"axle": {"type": "string", "enum": ["front", "rear"]}, "pads_percent_worn": {"type": "string", "description": "A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "note": {"type": "string"}}, "required": ["axle", "pads_percent_worn", "note"], "additionalProperties": false}}, "advisories": {"type": "array", "items": {"type": "string"}}, "total_cost": {"type": "string", "description": "Grand total as PRINTED on the document (incl. VAT). Empty if not printed or illegible - never compute it from line items. A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "amount_paid": {"type": "string", "description": "Amount charged, e.g. on a card receipt A plain number (e.g. 48210 or 54.85), or an empty string if not shown."}, "currency": {"type": "string"}, "next_due": {"type": "string", "description": "Next service or MOT expiry date/mileage if stated"}, "pii": {"type": "array", "items": {"type": "object", "properties": {"page": {"type": "integer", "description": "1-based page number"}, "category": {"type": "string", "enum": ["person_name", "address", "phone", "email", "signature", "account_or_card_number", "v5c_document_reference", "other_personal"]}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "category", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "unboxed_numbers": {"type": "array", "description": "Every other number of 3+ digits you did NOT box, for a code cross-check against the owner's personal data", "items": {"type": "object", "properties": {"page": {"type": "integer"}, "text": {"type": "string"}, "x0": {"type": "integer"}, "y0": {"type": "integer"}, "x1": {"type": "integer"}, "y1": {"type": "integer"}}, "required": ["page", "text", "x0", "y0", "x1", "y1"], "additionalProperties": false}}, "notes": {"type": "string", "description": "Uncertainties, illegible parts"}, "vehicle_related": {"type": "boolean", "description": "False if this isn't about a vehicle at all"}, "looks_like": {"type": "string", "description": "What the document or image appears to be, in a few words, e.g. 'a gas bill', 'a photo of a dog'"}, "content_flag": {"type": "string", "enum": ["none", "shows_person", "sexual", "violent_or_gory", "hateful", "illegal_or_suspicious", "other_objectionable"]}, "content_flag_reason": {"type": "string", "description": "One short sentence for the owner if content_flag isn't none"}, "separate_pages": {"type": "array", "items": {"type": "integer"}, "description": "Page numbers that are clearly a different document (another garage, date or job); empty if all pages belong together"}, "separate_pages_looks_like": {"type": "string", "description": "What those pages are, in a few words, e.g. 'an emissions test from Kings Motor Services, 23 Sep 2026'"}, "possibly_missing": {"type": "array", "items": {"type": "string"}, "description": "Paperwork from this visit that seems to be missing, each in a few plain words, e.g. 'page 2 of 3', 'the MOT certificate (an MOT test was charged)'. Empty if nothing clearly is."}, "mot_tests": {"type": "array", "description": "Only for doc_type mot_history: every MOT test listed, newest first. Empty for any other document.", "items": {"type": "object", "properties": {"date": {"type": "string", "description": "Date tested, YYYY-MM-DD"}, "result": {"type": "string", "enum": ["pass", "fail"]}, "mileage": {"type": "string", "description": "Odometer reading, a plain number, or empty"}, "mileage_unit": {"type": "string", "enum": ["miles", "km", "unknown"]}, "test_number": {"type": "string", "description": "MOT test number, digits only, or empty"}, "expiry_date": {"type": "string", "description": "Expiry date if shown, YYYY-MM-DD, or empty"}, "test_location": {"type": "string", "description": "The test station's name if shown, or empty"}, "items": {"type": "array", "items": {"type": "string"}, "description": "Each listed defect or advisory as printed, starting with its kind, e.g. 'Advisory: Oil leak, but not excessive' or 'Major: Nearside front brake pad less than 1.5 mm thick'"}}, "required": ["date", "result", "mileage", "mileage_unit", "test_number", "expiry_date", "test_location", "items"], "additionalProperties": false}}}, "required": ["doc_type", "registration", "vin", "make_model", "date_first_registered", "date", "invoice_number", "mileage", "mileage_unit", "garage_name", "garage_address", "garage_postcode", "service_mode", "work_items", "line_items", "tyre_depths_mm", "brake_wear", "advisories", "total_cost", "amount_paid", "currency", "next_due", "pii", "unboxed_numbers", "notes", "vehicle_related", "looks_like", "content_flag", "content_flag_reason", "separate_pages", "separate_pages_looks_like", "possibly_missing", "mot_tests"], "additionalProperties": false};
 const SYSTEM = "You read scanned UK vehicle documents for a car service-history app.\nThe owner's phone has already blacked out the personal data it found (solid black\nboxes); don't guess what is underneath. If the garage's own details are blacked out,\nleave those fields empty.\nAn MOT HISTORY (a print-out or screenshots of gov.uk's \"Check MOT history\", or a DVSA\nlist of several tests) is not a garage document: set doc_type to mot_history, put\nEVERY test in mot_tests (date, pass or fail, mileage, test number, expiry, test\nlocation if shown, and each defect or advisory as printed), leave garage_name, line_items\nand total_cost empty, set date to the newest test's date and mileage to its reading.\nAll pages you are given should belong to ONE document. If some pages are clearly a\ndifferent document (another garage, date or job), list them in separate_pages, say\nwhat they are in separate_pages_looks_like, and take every field from the main\ndocument only (still box personal data on every page).\nList in possibly_missing anything from this visit that the pages show should exist\nbut isn't here: a page number with no page (\"page 2 of 3\"), an MOT test charged but\nno MOT certificate, a sheet the invoice refers to. Only paperwork that shows the\nwork matters (the itemised invoice, its pages, an MOT certificate): never list a\npayment receipt, card slip or proof of payment. Only clear gaps; don't guess. If it isn't about a vehicle at\nall (a utility bill, a payslip, a random photo), set vehicle_related to false, say\nwhat it looks like in looks_like, and still box any personal data.\n\ncontent_flag: Porter only accepts vehicle paperwork. Set shows_person only if a\nphoto shows a person's face or body as its subject; fingers or a hand holding the\npaper, or a reflection, are normal and are \"none\". Set the others if it is sexual, violent or gory, hateful or\nextremist, or appears to be of questionable legality (e.g. a forged or altered\ndocument, cloned or stolen-vehicle paperwork, or anything promoting a crime).\nOrdinary documents are \"none\"; don't flag a document just because it isn't\nabout a car. Give a short, neutral reason for the owner that names the page. Extract the service-history fields,\nand locate every piece of personal data so it can be redacted before the document\nis shared with a prospective buyer.\n\nFields: itemise every part and labour line in line_items with the closest category.\nWrite each description in plain words an owner or buyer would understand, naming\nthe work or part (\"Alternator replacement\", \"Alternator, Lucas 110A\"): drop job\ncodes, internal referrals, part numbers and VAT breakdowns.\nRecord tyre tread depths, brake wear and advisories exactly as written. Copy the\nprinted grand total only; if no total is printed, leave total_cost empty and say so\nin notes. Give the garage's own address and postcode (not the customer's). If the\nwork was done at the customer's location (mobile mechanic, roadside patrol), set\nservice_mode to mobile, put the provider's name in garage_name (e.g. \"RAC\") and\nleave garage_address and garage_postcode empty.\n\nUse an empty string for any field that is not on the document, numbers included.\n\nPersonal data to box: names of private individuals (owners, keepers, customers),\ntheir addresses, phone numbers, email addresses, signatures, bank/card/account\nnumbers, and the V5C document reference number (11 digits). Also box FRAGMENTS of\npersonal data - e.g. the visible end of a phone number on another sheet peeking out\nfrom underneath. When unsure whether something is personal, box it -\nover-redacting is the safe failure.\n\nDo NOT box: the vehicle registration, VIN, make/model, mileage, dates, prices,\nwork descriptions, or the garage's own business name, address and phone.\n\nThen list every OTHER number of 3 or more digits that you can see and did not\nbox in unboxed_numbers, with its box: invoice, part and account references,\nphone numbers you judged to be the business's, and especially partial, cut-off\nor half-hidden numbers, including on other sheets showing underneath. Leave out\nmoney amounts, dates, times and mileage. The app checks these against the\nowner's personal data from their other documents.\n\nBox coordinates are integer pixels in the page image as you see it, with (x0, y0)\nthe top-left and (x1, y1) the bottom-right corner, plus the page number. Make each\nbox cover the whole item, one box per line of text.";
 const API_VERSION = "2026-10-21";
@@ -4131,6 +4147,7 @@ $("historyEmpty").hidden = visits.length > 0;
   renderNotes();
   renderTodo();
   markTimelineFold();
+  renderJumps();
 }
 $("clearHistory").onclick = e => {
   e.preventDefault();
@@ -4684,6 +4701,16 @@ $("tidyBtn").onclick = async e => {
   } catch (err) { setStatus("Couldn't tidy the names: " + err.message, "error", $("historyStatus")); }
 };
 const openPanel = id => { if ($(id).classList.contains("shut")) $(id).querySelector(".panel-head").click(); };
+const JUMPS = [["statsPanel", "📊 Glance"], ["lastDonePanel", "⏱️ Recent"], ["timelinePanel", "🧭 Timeline"], ["docsPanel", "📁 Docs"], ["yearsPanel", "📅 Years"], ["backupPanel", "💾 Back up"]];
+function renderJumps() {
+  const shown = JUMPS.filter(([id]) => !$(id).hidden && !$(id).closest("[hidden]"));
+  $("jumpChips").hidden = shown.length < 2;
+  $("jumpChips").replaceChildren(...shown.map(([id, label]) => {
+    const b = el("button", { type: "button", className: "jump-chip" }, label);
+    b.onclick = () => { openPanel(id); requestAnimationFrame(() => $(id).scrollIntoView({ behavior: "smooth", block: "start" })); };
+    return b;
+  }));
+}
 // Every section of History folds away from its header; the choice is
 // remembered on this phone.
 (() => {
@@ -5367,6 +5394,11 @@ document.querySelectorAll(".navtab").forEach(b => b.onclick = () => { showTab(b.
 showTab("history");   // History is home: Porter always opens on it
 // Anything scrolled to (a visit, a year, a box to check) lands below the
 // sticky tabs, whatever height they wrap to.
+if (window.visualViewport) {
+  const kb = () => $("mainTabs").classList.toggle("away", innerHeight - visualViewport.height > 150 && /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || ""));
+  visualViewport.addEventListener("resize", kb);
+  addEventListener("focusout", () => setTimeout(kb, 100));
+}
 const setNavHeight = () => document.documentElement.style.setProperty("--nav-h", $("mainTabs").offsetHeight + "px");
 setNavHeight(); addEventListener("resize", setNavHeight);
 
